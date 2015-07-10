@@ -44,6 +44,8 @@
 
 /* Device always responds with unset protocol flag */
 #define DDCCI_QUIRK_NO_PFLAG BIT(1)
+/* Device needs writing one byte at a time  */
+#define DDCCI_QUIRK_WRITE_BYTEWISE BIT(2)
 
 /* Flags */
 
@@ -51,8 +53,6 @@
 #define DDCCI_FLAG_DEPENDENT BIT(2)
 #define DDCCI_FLAG_EXTERNAL BIT(3)
 
-
-/* Helpers */
 
 extern struct bus_type ddcci_bus_type;
 
