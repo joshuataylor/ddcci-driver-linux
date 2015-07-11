@@ -123,4 +123,6 @@ static inline void ddcci_set_drvdata(struct ddcci_device *dev, void *data)
 	dev_set_drvdata(&dev->dev, data);
 }
 
+unsigned long ddcci_quirks(struct ddcci_device *dev);
+
 #endif

@@ -798,6 +798,11 @@ struct ddcci_device *ddcci_verify_device(struct device *dev)
 }
 EXPORT_SYMBOL(ddcci_verify_device);
 
+unsigned long ddcci_quirks(struct ddcci_device *dev) {
+	return dev->bus_drv_data->quirks;
+}
+EXPORT_SYMBOL(ddcci_quirks);
+
 int ddcci_register_driver(struct module *owner, struct ddcci_driver *driver) {
 	int ret;
 
