@@ -46,6 +46,8 @@
 #define DDCCI_QUIRK_NO_PFLAG BIT(1)
 /* Device needs writing one byte at a time  */
 #define DDCCI_QUIRK_WRITE_BYTEWISE BIT(2)
+/* Device repeats first byte on read */
+#define DDCCI_QUIRK_SKIP_FIRST_BYTE BIT(3)
 
 /* Flags */
 

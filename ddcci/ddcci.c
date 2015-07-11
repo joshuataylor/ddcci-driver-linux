@@ -158,7 +158,16 @@ static int __ddcci_read(struct i2c_client *client, unsigned char addr, bool p_fl
 	/* Read frame */
 	ret = i2c_master_recv(client, buf, len);
 	if (ret < 0) goto err_free;
-	else if (ret < 3) {
+
+	/* Skip first byte if quirk active */
+	if ((quirks & DDCCI_QUIRK_SKIP_FIRST_BYTE) && ret > 0 && len > 0) {
+		ret--;
+		len--;
+		buf++;
+	}
+
+	/* If answer too short (= incomplete) break out */
+	if (ret < 3) {
 		ret = -EIO;
 		goto err_free;
 	}
@@ -285,48 +294,103 @@ err_free:
 
 static int ddcci_identify_device(struct i2c_client* client, unsigned char addr, unsigned char *buf, unsigned char len)
 {
-	int ret = -ENODEV;
+	int i, payload_len, ret = -ENODEV;
+	unsigned long quirks;
 	unsigned char cmd[2] = { DDCCI_COMMAND_ID, 0x00 };
 	unsigned char *buffer;
+	unsigned char xor = DDCCI_HOST_ADDR_EVEN;
 	struct ddcci_bus_drv_data *bus_drv_data;
 
 	bus_drv_data = i2c_get_clientdata(client);
+	quirks = bus_drv_data->quirks;
 	buffer = bus_drv_data->recv_buffer;
 
-	if (!(bus_drv_data->quirks & DDCCI_QUIRK_WRITE_BYTEWISE)) {
+	/* Send Identification command */
+	if (!(quirks & DDCCI_QUIRK_WRITE_BYTEWISE)) {
 		ret = __ddcci_write_block(client, addr, buffer, true, cmd, 1);
 		if (ret == -ENXIO) {
 			if (i2c_check_functionality(client->adapter, I2C_FUNC_SMBUS_WRITE_BYTE)) {
-				bus_drv_data->quirks |= DDCCI_QUIRK_WRITE_BYTEWISE;
+				quirks |= DDCCI_QUIRK_WRITE_BYTEWISE;
+				dev_dbg(&client->dev, "DDC/CI bus quirk detected: writes must be done bytewise\n");
 				/* Some devices need writing twice after a failed blockwise write */
 				__ddcci_write_bytewise(client, addr, true, cmd, 2);
 				msleep(delay);
 			}
 		}
 	}
-	if (ret < 0 && (bus_drv_data->quirks & DDCCI_QUIRK_WRITE_BYTEWISE)) {
+	if (ret < 0 && (quirks & DDCCI_QUIRK_WRITE_BYTEWISE)) {
 		ret = __ddcci_write_bytewise(client, addr, true, cmd, 2);
 	}
 	if (ret < 0) {
 		return -ENODEV;
 	}
 
+	/* Wait */
 	msleep(delay);
 
-	ret = __ddcci_read(client, addr, true, DDCCI_QUIRK_NO_PFLAG, buffer, len+3);
-	if (ret < 0) {
-		return ret;
+	/* Receive response */
+	ret = i2c_master_recv(client, buffer, DDCCI_RECV_BUFFER_SIZE);
+	if (ret < 3) return -ENODEV;
+
+	/* Skip first byte if quirk already active */
+	if (quirks & DDCCI_QUIRK_SKIP_FIRST_BYTE) {
+		ret--;
+		buffer++;
 	}
-	else if (ret < 3) {
+
+	/* If answer too short (= incomplete) break out */
+	if (ret < 3) {
 		return -EIO;
 	}
-	if (!(bus_drv_data->quirks & DDCCI_QUIRK_NO_PFLAG) && !(buf[1] & 0x80)) {
-		bus_drv_data->quirks |= DDCCI_QUIRK_NO_PFLAG;
+
+	/* validate first byte */
+	if (buffer[0] != addr) {
+		return -ENODEV;
 	}
 
-	memcpy(buf, &buffer[2], ret-3);
+	/* Check if first byte is doubled (QUIRK_SKIP_FIRST_BYTE) */
+	if (!(quirks & DDCCI_QUIRK_SKIP_FIRST_BYTE)) {
+		if (buffer[0] == buffer[1]) {
+			quirks |= DDCCI_QUIRK_SKIP_FIRST_BYTE;
+			dev_dbg(&client->dev, "DDC/CI bus quirk detected: doubled first byte on read\n");
+			ret--;
+			buffer++;
+			if (ret < 3) {
+				return -EIO;
+			}
+		}
+	}
 
-	return ret-3;
+	/* validate second byte (protocol flag) */
+	if ((buffer[1] & 0x80) != 0x80 && !(quirks & DDCCI_QUIRK_NO_PFLAG)) {
+		dev_dbg(&client->dev, "DDC/CI bus quirk detected: device omits protocol flag on responses\n");
+		quirks |= DDCCI_QUIRK_NO_PFLAG;
+	}
+
+	/* get and check payload length */
+	payload_len = buffer[1] & 0x7F;
+	if (3+payload_len > ret) {
+		return -EMSGSIZE;
+	}
+
+	/* calculate checksum */
+	for (i = 0; i < 3+payload_len; i++) {
+		xor ^= buffer[i];
+	}
+
+	/* verify checksum */
+	if (xor != 0) {
+		dev_err(&client->dev, "invalid DDC/CI response, corrupted data - xor is 0x%02x, length 0x%02x\n", xor, payload_len);
+		return -EBADMSG;
+	}
+
+	/* save quirks */
+	bus_drv_data->quirks = quirks;
+
+	/* return result */
+	ret = payload_len;
+	memcpy(buf, &buffer[2], payload_len);
+	return payload_len;
 }
 
 /* Character device */
@@ -1033,8 +1097,6 @@ static int ddcci_detect_device(struct i2c_client *client, unsigned char addr, in
 
 	down(&drv_data->sem);
 
-	pr_debug("detecting %d:%02x:%02x\n", client->adapter->nr, outer_addr, addr);
-
 	/* Allocate buffer big enough for any capability string */
 	buffer = kmalloc(16384, GFP_KERNEL);
 	if (!buffer) {
@@ -1083,7 +1145,7 @@ static int ddcci_detect_device(struct i2c_client *client, unsigned char addr, in
 		goto err_free;
 	}
 
-	/* Read identification */
+	/* Read identification and check for quirks */
 	ret = ddcci_identify_device(client, addr, buffer, 29);
 	if (ret < 0) {
 		goto err_free;
@@ -1098,11 +1160,12 @@ static int ddcci_detect_device(struct i2c_client *client, unsigned char addr, in
 	ret = ddcci_get_caps(client, addr, buffer, 16384);
 	if (ret > 0) {
 		device->capabilities = kzalloc(ret+1, GFP_KERNEL);
-		device->capabilities_len = ret;
 		if (!device->capabilities) {
 			ret = -ENOMEM;
+
 			goto err_free;
 		}
+		device->capabilities_len = ret;
 		memcpy(device->capabilities, buffer, ret);
 
 		if (ddcci_parse_capstring(device)) {
@@ -1144,20 +1207,21 @@ static int ddcci_detect(struct i2c_client *client, struct i2c_board_info *info) 
 	unsigned char buf[32], xor;
 	unsigned char cmd[2] = { DDCCI_COMMAND_ID, 0x00 };
 
+	/* Check for i2c_master_* functionality */
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C))
 		return -ENODEV;
 
 	/* send Identification Request command */
 	outer_addr = client->addr << 1;
 	inner_addr = (outer_addr == DDCCI_DEFAULT_DEVICE_ADDR) ? DDCCI_HOST_ADDR_ODD : outer_addr | 1;
-	pr_info("detecting %d:%02x\n", client->adapter->nr, outer_addr);
+	pr_debug("detecting %d:%02x\n", client->adapter->nr, outer_addr);
 
 	ret = __ddcci_write_block(client, inner_addr, buf, true, cmd, 2);
 
 	if (ret == -ENXIO) {
 		if (!i2c_check_functionality(client->adapter, I2C_FUNC_SMBUS_WRITE_BYTE))
 			return -ENODEV;
-		pr_info("i2c write failed with ENXIO, trying bytewise writing\n");
+		pr_debug("i2c write failed with ENXIO, trying bytewise writing\n");
 		ret = __ddcci_write_bytewise(client, inner_addr, true, cmd, 2);
 		if (ret == 0) {
 			msleep(delay);
@@ -1176,21 +1240,12 @@ static int ddcci_detect(struct i2c_client *client, struct i2c_board_info *info) 
 		return -ENODEV;
 	}
 
-	/* check response */
+	/* check response startf with outer addr */
 	if (buf[0] != outer_addr) {
 		return -ENODEV;
 	}
-	if ((buf[1] & 0x7F) > ret) {
-		return -ENODEV;
-	}
-	xor = DDCCI_HOST_ADDR_EVEN;
-	for (i = 0; i < (buf[1] & 0x7F)+3; ++i)
-		xor ^= buf[i];
-	if (xor != 0) {
-		return -ENODEV;
-	}
 
-	pr_info("detected %d:%02x\n", client->adapter->nr, outer_addr);
+	pr_debug("detected %d:%02x\n", client->adapter->nr, outer_addr);
 
 	/* set device type */
 	strlcpy(info->type, (outer_addr == DDCCI_DEFAULT_DEVICE_ADDR) ? "ddcci" : "ddcci-dependent", I2C_NAME_SIZE);
@@ -1199,7 +1254,7 @@ static int ddcci_detect(struct i2c_client *client, struct i2c_board_info *info) 
 }
 
 static int ddcci_probe(struct i2c_client *client, const struct i2c_device_id *id) {
-	int i, ret = -ENODEV;
+	int i, ret = -ENODEV, tmp;
 	unsigned char main_addr, addr;
 	struct ddcci_bus_drv_data *drv_data;
 
@@ -1214,35 +1269,41 @@ static int ddcci_probe(struct i2c_client *client, const struct i2c_device_id *id
 	/* Set i2c client data */
 	i2c_set_clientdata(client, drv_data);
 
-
 	if (id->driver_data == 0) {
 		// Core device, probe at 0x6E
 		main_addr = DDCCI_DEFAULT_DEVICE_ADDR;
+		dev_dbg(&client->dev, "probing core device [%02x]\n", client->addr << 1);
 		if ((ret = ddcci_detect_device(client, main_addr, 0))) {
+			dev_info(&client->dev, "core device [%02x] probe failed: %d\n", client->addr << 1, ret);
 			if (ret == -EIO)
 				ret = -ENODEV;
 			goto err_free;
 		}
 
 		// Detect internal dependent devices
+		dev_dbg(&client->dev, "probing internal dependent devices\n");
 		for (i = 0; i < autoprobe_addr_count; ++i) {
 		addr = (unsigned short)autoprobe_addrs[i];
 			if ((addr & 1) == 0 && addr != main_addr) {
-				ddcci_detect_device(client, addr, main_addr);
+				tmp = ddcci_detect_device(client, addr, main_addr);
+				if (tmp < 0 && tmp != -ENODEV) {
+					dev_info(&client->dev, "internal dependent device [%02x:%02x] probe failed: %d\n", client->addr << 1, addr, ret);
+				}
 			}
 		}
 	}
 	else if (id->driver_data == 1) {
-		// Probe external dependent device
 		main_addr = client->addr << 1;
+		dev_dbg(&client->dev, "probing external dependent device [%02x]\n", main_addr);
 		if ((ret = ddcci_detect_device(client, main_addr, -1))) {
+			dev_info(&client->dev, "external dependent device [%02x] probe failed: %d\n", main_addr, ret);
 			if (ret == -EIO)
 				ret = -ENODEV;
 			goto err_free;
 		}
 	}
 	else {
-		pr_warn("probe() called with invalid i2c device id\n");
+		dev_warn(&client->dev, "probe() called with invalid i2c device id\n");
 		ret = -EINVAL;
 	}
 
