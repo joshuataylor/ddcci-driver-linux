@@ -1201,10 +1201,10 @@ end:
 }
 
 static int ddcci_detect(struct i2c_client *client, struct i2c_board_info *info) {
-	int ret, i;
+	int ret;
 	unsigned char outer_addr;
 	unsigned char inner_addr;
-	unsigned char buf[32], xor;
+	unsigned char buf[32];
 	unsigned char cmd[2] = { DDCCI_COMMAND_ID, 0x00 };
 
 	/* Check for i2c_master_* functionality */
