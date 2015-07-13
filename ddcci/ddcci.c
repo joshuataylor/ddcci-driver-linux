@@ -712,7 +712,7 @@ static ssize_t ddcci_attr_serial_show(struct device *dev, struct device_attribut
 	ssize_t ret = -ENOENT;
 
 	if (likely(device != NULL)) {
-		ret = sprintf(buf, "%d\n", device->device_number);
+		ret = scnprintf(buf, PAGE_SIZE, "%d\n", device->device_number);
 	}
 	return ret;
 }
