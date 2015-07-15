@@ -241,6 +241,10 @@ static int ddcci_read(struct i2c_client *client, unsigned char addr, bool p_flag
 			}
 		}
 	}
+	if (!(drv_data->quirks & DDCCI_QUIRK_WRITE_BYTEWISE)) {
+		/* second read to clear buffers, needed on some devices */
+		__ddcci_read(client, addr, true, drv_data->quirks, recvbuf, 1);
+	}
 err_free:
 	return ret;
 }
