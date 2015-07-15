@@ -225,6 +225,9 @@ static int ddcci_read(struct i2c_client *client, unsigned char addr, bool p_flag
 		drv_data->quirks, recvbuf, DDCCI_RECV_BUFFER_SIZE);
 	if (ret < 0) goto err_free;
 
+	if (drv_data->quirks & DDCCI_QUIRK_SKIP_FIRST_BYTE)
+		recvbuf++;
+
 	/* return result */
 	if (buf) {
 		if (ret > 3) {
