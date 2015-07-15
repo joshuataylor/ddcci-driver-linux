@@ -289,6 +289,8 @@ static int ddcci_get_caps(struct i2c_client* client, unsigned char addr, unsigne
 			buf += result-3;
 			cmd[1] = offset >> 8;
 			cmd[2] = offset & 0xFF;
+			/* Another superfluous read to make some devices happy... */
+			ddcci_read(client, addr, true, NULL, 2);
 		}
 	} while (result > 3 && counter < 200);
 
