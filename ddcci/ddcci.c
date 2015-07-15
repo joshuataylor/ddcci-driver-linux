@@ -30,7 +30,7 @@
 #define DDCCI_RECV_BUFFER_SIZE 130
 #define DEVICE_NAME "ddcci"
 
-static unsigned int delay = 45;
+static unsigned int delay = 60;
 unsigned short autoprobe_addrs[127] = { 0xF0, 0xF2, 0xF4, 0xF6, 0xF8 };
 int autoprobe_addr_count = 5;
 
