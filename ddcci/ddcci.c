@@ -31,7 +31,7 @@
 #define DEVICE_NAME "ddcci"
 
 static unsigned int delay = 60;
-unsigned short autoprobe_addrs[127] = { 0xF0, 0xF2, 0xF4, 0xF6, 0xF8 };
+unsigned short autoprobe_addrs[127] = {0xF0, 0xF2, 0xF4, 0xF6, 0xF8};
 int autoprobe_addr_count = 5;
 
 static dev_t ddcci_cdev_first;
@@ -49,7 +49,11 @@ struct ddcci_bus_drv_data {
 	unsigned char recv_buffer[DDCCI_RECV_BUFFER_SIZE];
 };
 
-static int __ddcci_write_bytewise(struct i2c_client *client, unsigned char addr, bool p_flag, const unsigned char *buf, unsigned char len) {
+/* Write a message to the DDC/CI bus using i2c_smbus_write_byte() */
+static int __ddcci_write_bytewise(struct i2c_client *client, unsigned char addr,
+				  bool p_flag, const unsigned char *buf,
+				  unsigned char len)
+{
 	int ret = 0;
 	unsigned char outer_addr = (unsigned char)(client->addr << 1);
 	unsigned xor = outer_addr;	/* initial xor value */
@@ -93,7 +97,11 @@ static int __ddcci_write_bytewise(struct i2c_client *client, unsigned char addr,
 	return ret;
 }
 
-static int __ddcci_write_block(struct i2c_client *client, unsigned char addr, unsigned char *sendbuf, bool p_flag, const unsigned char *data, unsigned char len) {
+/* Write a message to the DDC/CI bus using i2c_master_send() */
+static int __ddcci_write_block(struct i2c_client *client, unsigned char addr,
+			       unsigned char *sendbuf, bool p_flag,
+			       const unsigned char *data, unsigned char len)
+{
 	unsigned char outer_addr = (unsigned char)(client->addr << 1);
 	unsigned xor = outer_addr;	/* initial xor value */
 	unsigned char *ptr = sendbuf;
@@ -130,7 +138,15 @@ static int __ddcci_write_block(struct i2c_client *client, unsigned char addr, un
 	return i2c_master_send(client, sendbuf, len+3);
 }
 
-static int ddcci_write(struct i2c_client *client, unsigned char addr, bool p_flag, const unsigned char *data, unsigned char len) {
+/*
+ * Write a message to the DDC/CI bus.
+ *
+ * You must hold the bus semaphore when calling this function.
+ */
+static int ddcci_write(struct i2c_client *client, unsigned char addr,
+		       bool p_flag, const unsigned char *data,
+		       unsigned char len)
+{
 	struct ddcci_bus_drv_data *drv_data;
 	unsigned char *sendbuf;
 	int ret;
@@ -147,7 +163,14 @@ static int ddcci_write(struct i2c_client *client, unsigned char addr, bool p_fla
 	return ret;
 }
 
-static int __ddcci_read(struct i2c_client *client, unsigned char addr, bool p_flag, unsigned long quirks, unsigned char *buf, unsigned char len) {
+/*
+ * Read a response from the DDC/CI bus with headers directly into a buffer.
+ * Always check for DDCCI_QUIRK_SKIP_FIRST_BYTE when using this function.
+ */
+static int __ddcci_read(struct i2c_client *client, unsigned char addr,
+			bool p_flag, unsigned long quirks, unsigned char *buf,
+			unsigned char len)
+{
 	int i, payload_len, ret;
 	unsigned char xor = DDCCI_HOST_ADDR_EVEN;
 
@@ -157,7 +180,8 @@ static int __ddcci_read(struct i2c_client *client, unsigned char addr, bool p_fl
 
 	/* Read frame */
 	ret = i2c_master_recv(client, buf, len);
-	if (ret < 0) goto err_free;
+	if (ret < 0)
+		goto out_err;
 
 	/* Skip first byte if quirk active */
 	if ((quirks & DDCCI_QUIRK_SKIP_FIRST_BYTE) && ret > 0 && len > 0) {
@@ -169,20 +193,20 @@ static int __ddcci_read(struct i2c_client *client, unsigned char addr, bool p_fl
 	/* If answer too short (= incomplete) break out */
 	if (ret < 3) {
 		ret = -EIO;
-		goto err_free;
+		goto out_err;
 	}
 
 	/* validate first byte */
 	if (unlikely(buf[0] != addr)) {
 		ret = (buf[0] == '\0') ? -EAGAIN: -EIO;
-		goto err_free;
+		goto out_err;
 	}
 
 	/* validate second byte (protocol flag) */
 	if (unlikely((buf[1] & 0x80) != (p_flag << 7))) {
 		if (!p_flag || !(quirks & DDCCI_QUIRK_NO_PFLAG)) {
 			ret = -EIO;
-			goto err_free;
+			goto out_err;
 		}
 	}
 
@@ -199,19 +223,26 @@ static int __ddcci_read(struct i2c_client *client, unsigned char addr, bool p_fl
 
 	/* verify checksum */
 	if (xor != 0) {
-		dev_err(&client->dev, "invalid DDC/CI response, corrupted data - xor is 0x%02x, length 0x%02x\n", xor, payload_len);
+		dev_err(&client->dev, "invalid DDC/CI response, corrupted data - xor is 0x%02x, length 0x%02x\n",
+			xor, payload_len);
 		ret = -EBADMSG;
-		goto err_free;
+		goto out_err;
 	}
 
 	/* return result */
 	ret = 3+payload_len;
 
-err_free:
+out_err:
 	return ret;
 }
 
-static int ddcci_read(struct i2c_client *client, unsigned char addr, bool p_flag, unsigned char *buf, unsigned char len)
+/*
+ * Read a response from the DDC/CI bus
+ *
+ * You must hold the bus semaphore when calling this function.
+ */
+static int ddcci_read(struct i2c_client *client, unsigned char addr, bool p_flag,
+		      unsigned char *buf, unsigned char len)
 {
 	struct ddcci_bus_drv_data *drv_data;
 	unsigned char *recvbuf;
@@ -223,7 +254,8 @@ static int ddcci_read(struct i2c_client *client, unsigned char addr, bool p_flag
 	/* Read frame */
 	ret = __ddcci_read(client, addr, p_flag,
 		drv_data->quirks, recvbuf, DDCCI_RECV_BUFFER_SIZE);
-	if (ret < 0) goto err_free;
+	if (ret < 0)
+		return ret;
 
 	if (drv_data->quirks & DDCCI_QUIRK_SKIP_FIRST_BYTE)
 		recvbuf++;
@@ -245,11 +277,12 @@ static int ddcci_read(struct i2c_client *client, unsigned char addr, bool p_flag
 		/* second read to clear buffers, needed on some devices */
 		__ddcci_read(client, addr, true, drv_data->quirks, recvbuf, 1);
 	}
-err_free:
 	return ret;
 }
 
-static int ddcci_get_caps(struct i2c_client* client, unsigned char addr, unsigned char *buf, unsigned int len)
+/* Request the capability string for a device and put it into buf */
+static int ddcci_get_caps(struct i2c_client* client, unsigned char addr,
+			  unsigned char *buf, unsigned int len)
 {
 	int result = 0, counter = 0, offset = 0;
 	unsigned char cmd[3] = { DDCCI_COMMAND_CAPS, 0x00, 0x00};
@@ -302,7 +335,14 @@ err_free:
 	return result;
 }
 
-static int ddcci_identify_device(struct i2c_client* client, unsigned char addr, unsigned char *buf, unsigned char len)
+/*
+ * Request the device identification and put it into buf.
+ *
+ * Also detects all communication quirks and sets the corresponding flags
+ * in the ddcci_bus_drv_data structure associated with client.
+ */
+static int ddcci_identify_device(struct i2c_client* client, unsigned char addr,
+				 unsigned char *buf, unsigned char len)
 {
 	int i, payload_len, ret = -ENODEV;
 	unsigned long quirks;
@@ -318,14 +358,14 @@ static int ddcci_identify_device(struct i2c_client* client, unsigned char addr, 
 	/* Send Identification command */
 	if (!(quirks & DDCCI_QUIRK_WRITE_BYTEWISE)) {
 		ret = __ddcci_write_block(client, addr, buffer, true, cmd, 1);
-		if (ret == -ENXIO) {
-			if (i2c_check_functionality(client->adapter, I2C_FUNC_SMBUS_WRITE_BYTE)) {
-				quirks |= DDCCI_QUIRK_WRITE_BYTEWISE;
-				dev_dbg(&client->dev, "DDC/CI bus quirk detected: writes must be done bytewise\n");
-				/* Some devices need writing twice after a failed blockwise write */
-				__ddcci_write_bytewise(client, addr, true, cmd, 2);
-				msleep(delay);
-			}
+		if ((ret == -ENXIO)
+		    && i2c_check_functionality(client->adapter,
+					       I2C_FUNC_SMBUS_WRITE_BYTE)) {
+			quirks |= DDCCI_QUIRK_WRITE_BYTEWISE;
+			dev_dbg(&client->dev, "DDC/CI bus quirk detected: writes must be done bytewise\n");
+			/* Some devices need writing twice after a failed blockwise write */
+			__ddcci_write_bytewise(client, addr, true, cmd, 2);
+			msleep(delay);
 		}
 	}
 	if (ret < 0 && (quirks & DDCCI_QUIRK_WRITE_BYTEWISE)) {
@@ -390,7 +430,8 @@ static int ddcci_identify_device(struct i2c_client* client, unsigned char addr, 
 
 	/* verify checksum */
 	if (xor != 0) {
-		dev_err(&client->dev, "invalid DDC/CI response, corrupted data - xor is 0x%02x, length 0x%02x\n", xor, payload_len);
+		dev_err(&client->dev, "invalid DDC/CI response, corrupted data - xor is 0x%02x, length 0x%02x\n",
+			xor, payload_len);
 		return -EBADMSG;
 	}
 
@@ -411,8 +452,10 @@ struct ddcci_fp_data {
 	unsigned char buffer[129];
 };
 
-static int ddcci_cdev_open(struct inode* inode, struct file* filp) {
-	struct ddcci_device *dev = container_of(inode->i_cdev, struct ddcci_device, cdev);
+static int ddcci_cdev_open(struct inode* inode, struct file* filp)
+{
+	struct ddcci_device *dev = container_of(inode->i_cdev,
+						struct ddcci_device, cdev);
 	struct ddcci_fp_data *fp_data = NULL;
 
 	fp_data = kzalloc(sizeof(struct ddcci_fp_data), GFP_KERNEL);
@@ -428,8 +471,7 @@ static int ddcci_cdev_open(struct inode* inode, struct file* filp) {
 			kfree(fp_data);
 			return -EBUSY;
 		}
-	}
-	else {
+	} else {
 		if (down_read_trylock(&dev->cdev_sem) == 0) {
 			kfree(fp_data);
 			return -EBUSY;
@@ -442,14 +484,14 @@ static int ddcci_cdev_open(struct inode* inode, struct file* filp) {
 	return 0;
 }
 
-static int ddcci_cdev_close(struct inode* inode, struct file* filp) {
+static int ddcci_cdev_close(struct inode* inode, struct file* filp)
+{
 	struct ddcci_fp_data *fp_data = filp->private_data;
 	struct ddcci_device *dev = fp_data->dev;
 
 	if (fp_data->exclusive) {
 		up_write(&dev->cdev_sem);
-	}
-	else {
+	} else {
 		up_read(&dev->cdev_sem);
 	}
 
@@ -458,7 +500,9 @@ static int ddcci_cdev_close(struct inode* inode, struct file* filp) {
 	return 0;
 }
 
-static ssize_t ddcci_cdev_read(struct file* filp, char __user *buffer, size_t length, loff_t* offset) {
+static ssize_t ddcci_cdev_read(struct file* filp, char __user *buffer,
+			       size_t length, loff_t* offset)
+{
 	struct ddcci_fp_data *fp_data = filp->private_data;
 	struct ddcci_device *dev = fp_data->dev;
 	unsigned char *buf = fp_data->buffer;
@@ -473,14 +517,14 @@ static ssize_t ddcci_cdev_read(struct file* filp, char __user *buffer, size_t le
 	if (nonblocking) {
 		if (down_trylock(&dev->bus_drv_data->sem))
 			return -EAGAIN;
-	}
-	else {
+	} else {
 		if (down_interruptible(&dev->bus_drv_data->sem))
 			return -ERESTARTSYS;
 	}
 
 	/* Execute read */
-	ret = ddcci_read(dev->bus_drv_data->i2c_dev, dev->inner_addr, true, buf, length);
+	ret = ddcci_read(dev->bus_drv_data->i2c_dev, dev->inner_addr, true, buf,
+			 length);
 
 	if (ret > 0) {
 		/* Copy data from user space */
@@ -495,7 +539,9 @@ out:
 	return ret;
 }
 
-static ssize_t ddcci_cdev_write(struct file *filp, const char __user *buffer, size_t count, loff_t *offset) {
+static ssize_t ddcci_cdev_write(struct file *filp, const char __user *buffer,
+				size_t count, loff_t *offset)
+{
 	struct ddcci_fp_data *fp_data = filp->private_data;
 	struct ddcci_device *dev = fp_data->dev;
 	unsigned char *buf = fp_data->buffer;
@@ -514,8 +560,7 @@ static ssize_t ddcci_cdev_write(struct file *filp, const char __user *buffer, si
 	if (nonblocking) {
 		if (down_trylock(&dev->bus_drv_data->sem))
 			return -EAGAIN;
-	}
-	else {
+	} else {
 		if (down_interruptible(&dev->bus_drv_data->sem))
 			return -ERESTARTSYS;
 	}
@@ -528,7 +573,8 @@ static ssize_t ddcci_cdev_write(struct file *filp, const char __user *buffer, si
 		}
 
 		/* Execute write */
-		ret = ddcci_write(dev->bus_drv_data->i2c_dev, dev->inner_addr, true, buf, count);
+		ret = ddcci_write(dev->bus_drv_data->i2c_dev, dev->inner_addr,
+				  true, buf, count);
 	}
 
 	if (ret >= 0) {
@@ -542,7 +588,8 @@ err_out:
 	return ret;
 }
 
-static loff_t ddcci_cdev_seek(struct file *filp, loff_t offset, int anchor) {
+static loff_t ddcci_cdev_seek(struct file *filp, loff_t offset, int anchor)
+{
 	return -EINVAL;
 }
 
@@ -555,7 +602,8 @@ static struct file_operations ddcci_fops = {
 	.llseek = ddcci_cdev_seek
 };
 
-static int ddcci_setup_char_device(struct ddcci_device *device) {
+static int ddcci_setup_char_device(struct ddcci_device *device)
+{
 	int ret = -EINVAL;
 
 	/* Check if free minor exists */
@@ -587,7 +635,9 @@ out:
 
 /* sysfs attributes */
 
-static ssize_t ddcci_attr_capabilities_show(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t ddcci_attr_capabilities_show(struct device *dev,
+					    struct device_attribute *attr,
+					    char *buf)
 {
 	struct ddcci_device *device = ddcci_verify_device(dev);
 	ssize_t ret = -ENOENT;
@@ -601,8 +651,7 @@ static ssize_t ddcci_attr_capabilities_show(struct device *dev, struct device_at
 		memcpy(buf, device->capabilities, len);
 		if (len == 0) {
 			ret = len;
-		}
-		else if (likely(len < PAGE_SIZE)) {
+		} else if (likely(len < PAGE_SIZE)) {
 			buf[len] = '\n';
 			ret = len+1;
 		}
@@ -611,7 +660,8 @@ static ssize_t ddcci_attr_capabilities_show(struct device *dev, struct device_at
 	return ret;
 }
 
-static ssize_t ddcci_attr_prot_show(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t ddcci_attr_prot_show(struct device *dev,
+				    struct device_attribute *attr, char *buf)
 {
 	struct ddcci_device *device = ddcci_verify_device(dev);
 	ssize_t ret = -ENOENT;
@@ -632,7 +682,8 @@ static ssize_t ddcci_attr_prot_show(struct device *dev, struct device_attribute 
 	return ret;
 }
 
-static ssize_t ddcci_attr_type_show(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t ddcci_attr_type_show(struct device *dev,
+				    struct device_attribute *attr, char *buf)
 {
 	struct ddcci_device *device = ddcci_verify_device(dev);
 	ssize_t ret = -ENOENT;
@@ -653,7 +704,8 @@ static ssize_t ddcci_attr_type_show(struct device *dev, struct device_attribute 
 	return ret;
 }
 
-static ssize_t ddcci_attr_model_show(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t ddcci_attr_model_show(struct device *dev,
+				     struct device_attribute *attr, char *buf)
 {
 	struct ddcci_device *device = ddcci_verify_device(dev);
 	ssize_t ret = -ENOENT;
@@ -674,7 +726,8 @@ static ssize_t ddcci_attr_model_show(struct device *dev, struct device_attribute
 	return ret;
 }
 
-static ssize_t ddcci_attr_vendor_show(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t ddcci_attr_vendor_show(struct device *dev,
+				      struct device_attribute *attr, char *buf)
 {
 	struct ddcci_device *device = ddcci_verify_device(dev);
 	ssize_t ret = -ENOENT;
@@ -695,7 +748,8 @@ static ssize_t ddcci_attr_vendor_show(struct device *dev, struct device_attribut
 	return ret;
 }
 
-static ssize_t ddcci_attr_module_show(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t ddcci_attr_module_show(struct device *dev,
+				      struct device_attribute *attr, char *buf)
 {
 	struct ddcci_device *device = ddcci_verify_device(dev);
 	ssize_t ret = -ENOENT;
@@ -716,7 +770,8 @@ static ssize_t ddcci_attr_module_show(struct device *dev, struct device_attribut
 	return ret;
 }
 
-static ssize_t ddcci_attr_serial_show(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t ddcci_attr_serial_show(struct device *dev,
+				      struct device_attribute *attr, char *buf)
 {
 	struct ddcci_device *device = ddcci_verify_device(dev);
 	ssize_t ret = -ENOENT;
@@ -827,7 +882,8 @@ static char *ddcci_devnode(struct device *dev,
 	struct ddcci_device *device;
 
 	device = to_ddcci_device(dev);
-	return kasprintf(GFP_KERNEL, "bus/ddcci/%d/display", device->i2c_client->adapter->nr);
+	return kasprintf(GFP_KERNEL, "bus/ddcci/%d/display",
+			 device->i2c_client->adapter->nr);
 }
 
 static char *ddcci_dependent_devnode(struct device *dev,
@@ -838,12 +894,18 @@ static char *ddcci_dependent_devnode(struct device *dev,
 	device = to_ddcci_device(dev);
 	if (device->flags & DDCCI_FLAG_EXTERNAL) {
 		if (device->outer_addr == device->inner_addr)
-			return kasprintf(GFP_KERNEL, "bus/ddcci/%d/e%02x", device->i2c_client->adapter->nr, device->outer_addr);
+			return kasprintf(GFP_KERNEL, "bus/ddcci/%d/e%02x",
+					 device->i2c_client->adapter->nr,
+					 device->outer_addr);
 		else
-			return kasprintf(GFP_KERNEL, "bus/ddcci/%d/e%02x%02x", device->i2c_client->adapter->nr, device->outer_addr, device->inner_addr);
+			return kasprintf(GFP_KERNEL, "bus/ddcci/%d/e%02x%02x",
+					 device->i2c_client->adapter->nr,
+					 device->outer_addr, device->inner_addr);
 	}
 	else {
-		return kasprintf(GFP_KERNEL, "bus/ddcci/%d/i%02x", device->i2c_client->adapter->nr, device->inner_addr);
+		return kasprintf(GFP_KERNEL, "bus/ddcci/%d/i%02x",
+				 device->i2c_client->adapter->nr,
+				 device->inner_addr);
 	}
 }
 
@@ -863,6 +925,10 @@ static struct device_type ddcci_dependent_type = {
 	.devnode	= ddcci_dependent_devnode
 };
 
+/**
+ * ddcci_verify_device - return parameter as ddcci_device, or NULL
+ * @dev: device, probably from some driver model iterator
+ */
 struct ddcci_device *ddcci_verify_device(struct device *dev)
 {
 	if (unlikely(dev == NULL)) return NULL;
@@ -872,12 +938,27 @@ struct ddcci_device *ddcci_verify_device(struct device *dev)
 }
 EXPORT_SYMBOL(ddcci_verify_device);
 
-unsigned long ddcci_quirks(struct ddcci_device *dev) {
+/**
+ * ddcci_quirks - Get quirks for DDC/CI device
+ * @dev: Target DDC/CI device
+ */
+unsigned long ddcci_quirks(struct ddcci_device *dev)
+{
+	if (unlikely(WARN_ON(!dev)))
+		return ~0L;
+	if (unlikely(WARN_ON(!dev->bus_drv_data)))
+		return ~0L;
 	return dev->bus_drv_data->quirks;
 }
 EXPORT_SYMBOL(ddcci_quirks);
 
-int ddcci_register_driver(struct module *owner, struct ddcci_driver *driver) {
+/**
+ * ddcci_register_driver - register DDC/CI driver
+ * @owner: the owning module
+ * @driver: the driver to register
+ */
+int ddcci_register_driver(struct module *owner, struct ddcci_driver *driver)
+{
 	int ret;
 
 	/* Can't register until after driver model init */
@@ -901,13 +982,29 @@ int ddcci_register_driver(struct module *owner, struct ddcci_driver *driver) {
 }
 EXPORT_SYMBOL(ddcci_register_driver);
 
-void ddcci_del_driver(struct ddcci_driver *driver) {
+/**
+ * ddcci_del_driver - unregister DDC/CI driver
+ * @driver: the driver being unregistered
+ */
+void ddcci_del_driver(struct ddcci_driver *driver)
+{
 	driver_unregister(&driver->driver);
 	pr_debug("driver [%s] unregistered\n", driver->driver.name);
 }
 EXPORT_SYMBOL(ddcci_del_driver);
 
-int ddcci_device_write(struct ddcci_device *dev, bool p_flag, unsigned char *data, unsigned char length) {
+/**
+ * ddcci_device_write - Write a message to a DDC/CI device
+ * @dev: Target DDC/CI device
+ * @p_flag: Protocol flag, true for standard control messages
+ * @data: Data that will be written to the device
+ * @length: How many bytes to write
+ *
+ * Writes the message to the device and sleeps (see module parameter 'delay')
+ */
+int ddcci_device_write(struct ddcci_device *dev, bool p_flag,
+		       unsigned char *data, unsigned char length)
+{
 	int ret;
 
 	if (down_interruptible(&dev->bus_drv_data->sem)) {
@@ -920,7 +1017,16 @@ int ddcci_device_write(struct ddcci_device *dev, bool p_flag, unsigned char *dat
 }
 EXPORT_SYMBOL(ddcci_device_write);
 
-int ddcci_device_read(struct ddcci_device *dev, bool p_flag, unsigned char *buffer, unsigned char length) {
+/**
+ * ddcci_device_read - Read a response from a DDC/CI device
+ * @dev: Target DDC/CI device
+ * @p_flag: Protocol flag, must match the corresponding write
+ * @buffer: Where to store data read from the device
+ * @length: Buffer size
+ */
+int ddcci_device_read(struct ddcci_device *dev, bool p_flag,
+		      unsigned char *buffer, unsigned char length)
+{
 	int ret;
 
 	if (down_interruptible(&dev->bus_drv_data->sem)) {
@@ -932,7 +1038,21 @@ int ddcci_device_read(struct ddcci_device *dev, bool p_flag, unsigned char *buff
 }
 EXPORT_SYMBOL(ddcci_device_read);
 
-int ddcci_device_writeread(struct ddcci_device *dev, bool p_flag, unsigned char *buffer, unsigned char length, unsigned char maxlength) {
+/**
+ * ddcci_device_writeread - Write a message to a device and read the response
+ * @dev: Target DDC/CI device
+ * @p_flag: Protocol flag, true for standard control messages
+ * @buffer: Buffer used for write and read
+ * @length: How many bytes to write
+ * @maxlength: Buffer size on read
+ *
+ * Writing, sleeping and reading are done without releasing the DDC/CI bus.
+ * This provides atomicity in respect to other DDC/CI accesses on the same bus.
+ */
+int ddcci_device_writeread(struct ddcci_device *dev, bool p_flag,
+			   unsigned char *buffer, unsigned char length,
+			   unsigned char maxlength)
+{
 	int ret;
 
 	if (down_interruptible(&dev->bus_drv_data->sem)) {
@@ -950,7 +1070,8 @@ EXPORT_SYMBOL(ddcci_device_writeread);
 
 #define IS_ANY_ID(x) (((x)[0] == -1) && ((x)[7] == -1))
 
-static const struct ddcci_device_id *ddcci_match_id(const struct ddcci_device_id *id, const struct ddcci_device *device)
+static const struct ddcci_device_id *ddcci_match_id(const struct ddcci_device_id *id,
+						    const struct ddcci_device *device)
 {
 	while (id->prot[0] || id->type[0] || id->model[0] || id->vendor[0] || id->module[0]) {
 		if ((IS_ANY_ID(id->prot) || (strcmp(device->prot, id->prot) == 0))
@@ -1030,7 +1151,8 @@ struct bus_type ddcci_bus_type = {
 
 /* Main I2C driver */
 
-static char *ddcci_capstr_tok(const char *s, const char *tag) {
+static char *ddcci_capstr_tok(const char *s, const char *tag)
+{
 	const char *ptr = s;
 	char *end;
 	int depth = 0;
@@ -1051,7 +1173,9 @@ static char *ddcci_capstr_tok(const char *s, const char *tag) {
 	return end;
 }
 
-static char *ddcci_cpy_capstr_item(char *dest, const char *src, const char *tag, size_t maxlen) {
+static char *ddcci_cpy_capstr_item(char *dest, const char *src, const char *tag,
+				   size_t maxlen)
+{
 	char *ptr;
 	ptrdiff_t len;
 	int taglen = strlen(tag);
@@ -1073,7 +1197,8 @@ static char *ddcci_cpy_capstr_item(char *dest, const char *src, const char *tag,
 	return ++ptr;
 }
 
-static int ddcci_parse_capstring(struct ddcci_device *device) {
+static int ddcci_parse_capstring(struct ddcci_device *device)
+{
 	char *ptr = device->capabilities;
 	if (!ptr) return -EINVAL;
 
@@ -1098,7 +1223,9 @@ static int ddcci_parse_capstring(struct ddcci_device *device) {
 	return 0;
 }
 
-static int ddcci_detect_device(struct i2c_client *client, unsigned char addr, int dependent) {
+static int ddcci_detect_device(struct i2c_client *client, unsigned char addr,
+			       int dependent)
+{
 	int ret;
 	unsigned char outer_addr = client->addr << 1;
 	unsigned char *buffer = NULL;
@@ -1210,7 +1337,8 @@ end:
 	return ret;
 }
 
-static int ddcci_detect(struct i2c_client *client, struct i2c_board_info *info) {
+static int ddcci_detect(struct i2c_client *client, struct i2c_board_info *info)
+{
 	int ret;
 	unsigned char outer_addr;
 	unsigned char inner_addr;
@@ -1263,7 +1391,8 @@ static int ddcci_detect(struct i2c_client *client, struct i2c_board_info *info) 
 	return 0;
 }
 
-static int ddcci_probe(struct i2c_client *client, const struct i2c_device_id *id) {
+static int ddcci_probe(struct i2c_client *client, const struct i2c_device_id *id)
+{
 	int i, ret = -ENODEV, tmp;
 	unsigned char main_addr, addr;
 	struct ddcci_bus_drv_data *drv_data;
@@ -1282,9 +1411,11 @@ static int ddcci_probe(struct i2c_client *client, const struct i2c_device_id *id
 	if (id->driver_data == 0) {
 		// Core device, probe at 0x6E
 		main_addr = DDCCI_DEFAULT_DEVICE_ADDR;
-		dev_dbg(&client->dev, "probing core device [%02x]\n", client->addr << 1);
+		dev_dbg(&client->dev, "probing core device [%02x]\n",
+			client->addr << 1);
 		if ((ret = ddcci_detect_device(client, main_addr, 0))) {
-			dev_info(&client->dev, "core device [%02x] probe failed: %d\n", client->addr << 1, ret);
+			dev_info(&client->dev, "core device [%02x] probe failed: %d\n",
+				 client->addr << 1, ret);
 			if (ret == -EIO)
 				ret = -ENODEV;
 			goto err_free;
@@ -1297,7 +1428,8 @@ static int ddcci_probe(struct i2c_client *client, const struct i2c_device_id *id
 			if ((addr & 1) == 0 && addr != main_addr) {
 				tmp = ddcci_detect_device(client, addr, main_addr);
 				if (tmp < 0 && tmp != -ENODEV) {
-					dev_info(&client->dev, "internal dependent device [%02x:%02x] probe failed: %d\n", client->addr << 1, addr, ret);
+					dev_info(&client->dev, "internal dependent device [%02x:%02x] probe failed: %d\n",
+						 client->addr << 1, addr, ret);
 				}
 			}
 		}
@@ -1306,7 +1438,8 @@ static int ddcci_probe(struct i2c_client *client, const struct i2c_device_id *id
 		main_addr = client->addr << 1;
 		dev_dbg(&client->dev, "probing external dependent device [%02x]\n", main_addr);
 		if ((ret = ddcci_detect_device(client, main_addr, -1))) {
-			dev_info(&client->dev, "external dependent device [%02x] probe failed: %d\n", main_addr, ret);
+			dev_info(&client->dev, "external dependent device [%02x] probe failed: %d\n",
+				 main_addr, ret);
 			if (ret == -EIO)
 				ret = -ENODEV;
 			goto err_free;
@@ -1324,7 +1457,8 @@ end:
 	return ret;
 }
 
-static int ddcci_remove_helper(struct device *dev, void* p) {
+static int ddcci_remove_helper(struct device *dev, void* p)
+{
 	unsigned char outer_addr;
 	struct ddcci_device *device;
 
@@ -1346,7 +1480,8 @@ static int ddcci_remove_helper(struct device *dev, void* p) {
 	return 0;
 }
 
-static int ddcci_remove(struct i2c_client *client) {
+static int ddcci_remove(struct i2c_client *client)
+{
 	struct ddcci_bus_drv_data *drv_data = i2c_get_clientdata(client);
 	struct device *dev;
 	unsigned char outer_addr = client->addr << 1;
@@ -1453,11 +1588,13 @@ static void __exit ddcci_module_exit(void)
 module_init(ddcci_module_init);
 module_exit(ddcci_module_exit);
 
+/* Module parameter description */
 module_param(delay, uint, S_IRUGO|S_IWUSR);
-MODULE_PARM_DESC(delay, "default delay after bus writes (in ms, default 45)");
+MODULE_PARM_DESC(delay, "default delay after bus writes (in ms, default 60)");
 module_param_array(autoprobe_addrs, ushort, &autoprobe_addr_count, S_IRUGO|S_IWUSR);
 MODULE_PARM_DESC(autoprobe_addrs, "internal dependent device addresses to autoprobe");
 
+/* Module description */
 MODULE_AUTHOR("Christoph Grenz");
 MODULE_DESCRIPTION("DDC/CI bus driver");
 MODULE_VERSION("0.1");
