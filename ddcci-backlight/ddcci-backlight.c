@@ -1,5 +1,5 @@
 /*
- *  DDC/CI monitor driver
+ *  DDC/CI monitor backlight driver
  *
  *  Copyright (c) 2015 Christoph Grenz
  */
@@ -35,7 +35,8 @@ struct ddcci_monitor_drv_data {
 	unsigned char used_vcp;
 };
 
-static int ddcci_monitor_writectrl(struct ddcci_device* device, unsigned char ctrl, unsigned short value)
+static int ddcci_monitor_writectrl(struct ddcci_device* device,
+				   unsigned char ctrl, unsigned short value)
 {
 	unsigned char buf[4];
 	int ret;
@@ -46,15 +47,17 @@ static int ddcci_monitor_writectrl(struct ddcci_device* device, unsigned char ct
 	buf[3] = (value & 255);
 
 	ret = ddcci_device_write(device, true, buf, sizeof(buf));
-	
+
 	return ret;
 }
 
-static int ddcci_monitor_readctrl(struct ddcci_device* device, unsigned char ctrl, unsigned short *value, unsigned short *maximum)
+static int ddcci_monitor_readctrl(struct ddcci_device* device,
+				  unsigned char ctrl, unsigned short *value,
+				  unsigned short *maximum)
 {
 	int ret;
 	unsigned char buf[10];
-	
+
 	buf[0] = DDCCI_COMMAND_READ;
 	buf[1] = ctrl;
 
@@ -63,21 +66,21 @@ static int ddcci_monitor_readctrl(struct ddcci_device* device, unsigned char ctr
 
 	if (ret == 0) return -ENOTSUPP;
 
-	if (ret == 8 && buf[0] == DDCCI_REPLY_READ && buf[2] == ctrl) 
-	{	
+	if (ret == 8 && buf[0] == DDCCI_REPLY_READ && buf[2] == ctrl)
+	{
 		if (value) {
 			*value = buf[6] * 256 + buf[7];
 		}
-		
+
 		if (maximum) {
 			*maximum = buf[4] * 256 + buf[5];
 		}
-		
+
 		if (buf[1] == 1) return -ENOTSUPP;
 		if (buf[1] != 0) return -EIO;
 		return 0;
 	}
-	
+
 	return -EIO;
 }
 
@@ -98,25 +101,28 @@ static int ddcci_backlight_update_status(struct backlight_device *bl)
 	if (bl->props.power != FB_BLANK_UNBLANK ||
 	    bl->props.state & BL_CORE_FBBLANK)
 		brightness = 0;
-	
-	ret = ddcci_monitor_writectrl(drv_data->device, DDCCI_MONITOR_LUMINANCE, brightness);
+
+	ret = ddcci_monitor_writectrl(drv_data->device, DDCCI_MONITOR_LUMINANCE,
+				      brightness);
 	if (ret > 0) return 0;
 	return ret;
 }
 
-static int ddcci_backlight_get_brightness(struct backlight_device *bl) {
+static int ddcci_backlight_get_brightness(struct backlight_device *bl)
+{
 	unsigned short value = 0, maxval = 0;
 	int ret;
 	struct ddcci_monitor_drv_data *drv_data = bl_get_data(bl);
-	
-	ret = ddcci_monitor_readctrl(drv_data->device, DDCCI_MONITOR_LUMINANCE, &value, &maxval);
+
+	ret = ddcci_monitor_readctrl(drv_data->device, DDCCI_MONITOR_LUMINANCE,
+				     &value, &maxval);
 	if (ret < 0)
 		return ret;
-	
+
 	bl->props.brightness = value;
 	bl->props.max_brightness = maxval;
 	ret = value;
-	
+
 	return ret;
 }
 
@@ -127,23 +133,28 @@ static const struct backlight_ops ddcci_backlight_ops = {
 	.check_fb	= ddcci_backlight_check_fb,
 };
 
-static int ddcci_monitor_probe(struct ddcci_device *dev, const struct ddcci_device_id *id) {
+static int ddcci_monitor_probe(struct ddcci_device *dev,
+			       const struct ddcci_device_id *id)
+{
 	struct ddcci_monitor_drv_data *drv_data;
 	struct backlight_properties props;
 	struct backlight_device *bl = NULL;
 	int ret = 0;
 	unsigned short brightness = 0, max_brightness = 0;
-	
+
 	/* Initialize driver data structure */
-	drv_data = devm_kzalloc(&dev->dev, sizeof(struct ddcci_monitor_drv_data), GFP_KERNEL);
+	drv_data = devm_kzalloc(&dev->dev, sizeof(struct ddcci_monitor_drv_data),
+				GFP_KERNEL);
 	if (!drv_data) return -ENOMEM;
 	drv_data->device = dev;
-	
+
 	/* Try getting luminance */
-	ret = ddcci_monitor_readctrl(drv_data->device, DDCCI_MONITOR_LUMINANCE, &brightness, &max_brightness);
+	ret = ddcci_monitor_readctrl(drv_data->device, DDCCI_MONITOR_LUMINANCE,
+				     &brightness, &max_brightness);
 	if (ret < 0) {
 		if (ret == -ENOTSUPP)
-			dev_info(&dev->dev, "monitor does not support reading luminance\n");
+			dev_info(&dev->dev,
+				 "monitor does not support reading luminance\n");
 		goto err_free;
 	}
 	drv_data->used_vcp = DDCCI_MONITOR_LUMINANCE;
@@ -161,7 +172,8 @@ static int ddcci_monitor_probe(struct ddcci_device *dev, const struct ddcci_devi
 		dev_err(&dev->dev, "failed to register backlight\n");
 		return PTR_ERR(bl);
 	}
-	dev_info(&dev->dev, "registered luminance as backlight device %s\n", dev_name(&dev->dev));
+	dev_info(&dev->dev, "registered luminance as backlight device %s\n",
+		 dev_name(&dev->dev));
 
 	goto end;
 err_free:
@@ -170,7 +182,8 @@ end:
 	return ret;
 }
 
-static int ddcci_monitor_remove(struct ddcci_device *dev) {
+static int ddcci_monitor_remove(struct ddcci_device *dev)
+{
 	dev_dbg(&dev->dev, "removing device\n");
 	return 0;
 }
