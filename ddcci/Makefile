@@ -26,6 +26,7 @@ KDIR := /lib/modules/$(KVER)/build
 PWD := $(shell pwd)
 
 obj-m := ddcci.o
+ddcci-y := ddcci-bus.o
 
 src ?= $(PWD)
 obj ?= .
@@ -33,7 +34,7 @@ ccflags-y := -I$(src)/../include
 
 module: ddcci.ko
 
-ddcci.ko: ddcci.c
+ddcci.ko: ddcci-bus.c
 	$(MAKE) -C "$(KDIR)" SUBDIRS="$(src)" modules
 
 ddcci.mod.c: ddcci.ko
