@@ -1,7 +1,7 @@
 /*
  *  DDC/CI bus driver
  *
- *  Copyright (c) 2015 Christoph Grenz
+ *  Copyright (c) 2016 Christoph Grenz
  */
 
 /*
