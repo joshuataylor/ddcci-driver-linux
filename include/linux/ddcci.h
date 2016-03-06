@@ -57,7 +57,7 @@
 
 extern struct bus_type ddcci_bus_type;
 
-struct ddcci_bus_drv_data;
+struct ddcci_i2c_drv_data;
 
 /* struct ddcci_device_id - identifies DDC/CI devices for probing */
 struct ddcci_device_id {
@@ -78,7 +78,7 @@ struct ddcci_device_id {
  * @capabilities: Device capability string.
  * @capabilities_len: Length of capability string.
  * @i2c_client: Parent I2C device.
- * @bus_drv_data: Driver internal data structure.
+ * @bus_drv_data: Internal data structure.
  * @dev: Driver model device node for the slave.
  * @cdev: Character device structure
  * @cdev_sem: RW semaphore for exclusive access on character device.
@@ -96,7 +96,7 @@ struct ddcci_device {
 	char *capabilities;
 	size_t capabilities_len;
 	struct i2c_client *i2c_client;
-	struct ddcci_bus_drv_data *bus_drv_data;
+	struct ddcci_i2c_drv_data *bus_drv_data;
 	struct device dev;
 	struct cdev cdev;
 	struct rw_semaphore cdev_sem;

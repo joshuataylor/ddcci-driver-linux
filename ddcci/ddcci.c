@@ -42,7 +42,7 @@ static DEFINE_SEMAPHORE(core_lock);
 struct bus_type ddcci_bus_type;
 EXPORT_SYMBOL_GPL(ddcci_bus_type);
 
-struct ddcci_bus_drv_data {
+struct ddcci_i2c_drv_data {
 	unsigned long quirks;
 	struct i2c_client *i2c_dev;
 	struct semaphore sem;
@@ -145,7 +145,7 @@ static int ddcci_write(struct i2c_client *client, unsigned char addr,
 		       bool p_flag, const unsigned char *data,
 		       unsigned char len)
 {
-	struct ddcci_bus_drv_data *drv_data;
+	struct ddcci_i2c_drv_data *drv_data;
 	unsigned char *sendbuf;
 	int ret;
 
@@ -242,7 +242,7 @@ out_err:
 static int ddcci_read(struct i2c_client *client, unsigned char addr, bool p_flag,
 		      unsigned char *buf, unsigned char len)
 {
-	struct ddcci_bus_drv_data *drv_data;
+	struct ddcci_i2c_drv_data *drv_data;
 	unsigned char *recvbuf;
 	int ret;
 
@@ -337,7 +337,7 @@ err_free:
  * Request the device identification and put it into buf.
  *
  * Also detects all communication quirks and sets the corresponding flags
- * in the ddcci_bus_drv_data structure associated with client.
+ * in the ddcci_i2c_drv_data structure associated with client.
  *
  * The identification command will fail on most DDC devices, as it is optional
  * to support, but even the "failed" response suffices to detect quirks.
@@ -350,7 +350,7 @@ static int ddcci_identify_device(struct i2c_client* client, unsigned char addr,
 	unsigned char cmd[2] = { DDCCI_COMMAND_ID, 0x00 };
 	unsigned char *buffer;
 	unsigned char xor = DDCCI_HOST_ADDR_EVEN;
-	struct ddcci_bus_drv_data *bus_drv_data;
+	struct ddcci_i2c_drv_data *bus_drv_data;
 
 	bus_drv_data = i2c_get_clientdata(client);
 	quirks = bus_drv_data->quirks;
@@ -1244,7 +1244,7 @@ static int ddcci_detect_device(struct i2c_client *client, unsigned char addr,
 	int ret;
 	unsigned char outer_addr = client->addr << 1;
 	unsigned char *buffer = NULL;
-	struct ddcci_bus_drv_data *drv_data = i2c_get_clientdata(client);
+	struct ddcci_i2c_drv_data *drv_data = i2c_get_clientdata(client);
 	struct ddcci_device *device = NULL;
 
 	down(&drv_data->sem);
@@ -1412,10 +1412,10 @@ static int ddcci_probe(struct i2c_client *client, const struct i2c_device_id *id
 {
 	int i, ret = -ENODEV, tmp;
 	unsigned char main_addr, addr;
-	struct ddcci_bus_drv_data *drv_data;
+	struct ddcci_i2c_drv_data *drv_data;
 
 	/* Initialize driver data structure */
-	drv_data = devm_kzalloc(&client->dev, sizeof(struct ddcci_bus_drv_data), GFP_KERNEL);
+	drv_data = devm_kzalloc(&client->dev, sizeof(struct ddcci_i2c_drv_data), GFP_KERNEL);
 	if (!drv_data) {
 		return -ENOMEM;
 	}
@@ -1506,7 +1506,7 @@ static int ddcci_remove_helper(struct device *dev, void* p)
 /* I2C driver remove callback: unregister all subdevices */
 static int ddcci_remove(struct i2c_client *client)
 {
-	struct ddcci_bus_drv_data *drv_data = i2c_get_clientdata(client);
+	struct ddcci_i2c_drv_data *drv_data = i2c_get_clientdata(client);
 	struct device *dev;
 	unsigned char outer_addr = client->addr << 1;
 
@@ -1611,5 +1611,5 @@ MODULE_PARM_DESC(autoprobe_addrs, "internal dependent device addresses to autopr
 /* Module description */
 MODULE_AUTHOR("Christoph Grenz");
 MODULE_DESCRIPTION("DDC/CI bus driver");
-MODULE_VERSION("0.1");
+MODULE_VERSION("0.2");
 MODULE_LICENSE("GPL");
