@@ -30,9 +30,10 @@
 #define DDCCI_RECV_BUFFER_SIZE 130
 #define DEVICE_NAME "ddcci"
 
+static unsigned int probe_interval = 13;
 static unsigned int delay = 60;
-unsigned short autoprobe_addrs[127] = {0xF0, 0xF2, 0xF4, 0xF6, 0xF8};
-int autoprobe_addr_count = 5;
+static unsigned short autoprobe_addrs[127] = {0xF0, 0xF2, 0xF4, 0xF6, 0xF8};
+static int autoprobe_addr_count = 5;
 
 static dev_t ddcci_cdev_first;
 static dev_t ddcci_cdev_next;
@@ -1603,6 +1604,8 @@ module_init(ddcci_module_init);
 module_exit(ddcci_module_exit);
 
 /* Module parameter description */
+module_param(probe_interval, uint, S_IRUGO);
+MODULE_PARM_DESC(probe_interval, "interval to probe the bus for DDC/CI compatible devices (in s, default 13)");
 module_param(delay, uint, S_IRUGO|S_IWUSR);
 MODULE_PARM_DESC(delay, "default delay after bus writes (in ms, default 60)");
 module_param_array(autoprobe_addrs, ushort, &autoprobe_addr_count, S_IRUGO|S_IWUSR);
