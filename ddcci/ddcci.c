@@ -24,6 +24,7 @@
 #include <linux/rwsem.h>
 #include <linux/sem.h>
 #include <linux/slab.h>
+#include <linux/workqueue.h>
 
 #include <linux/ddcci.h>
 
@@ -39,6 +40,7 @@ static dev_t ddcci_cdev_first;
 static dev_t ddcci_cdev_next;
 static dev_t ddcci_cdev_end;
 static DEFINE_SEMAPHORE(core_lock);
+static struct workqueue_struct *ddcci_workqueue = NULL;
 
 struct bus_type ddcci_bus_type;
 EXPORT_SYMBOL_GPL(ddcci_bus_type);
@@ -1567,6 +1569,14 @@ static int __init ddcci_module_init(void)
 		goto err_busreg;
 	}
 
+	/* Create workqueue */
+	ddcci_workqueue = alloc_workqueue(DEVICE_NAME, WQ_FREEZABLE|WQ_UNBOUND, 1);
+	if (!ddcci_workqueue) {
+		pr_err("failed to allocate workqueue\n");
+		ret = -ENOMEM;
+		goto err_wqreg;
+	}
+
 	/* Register I2C driver */
 	ret = i2c_add_driver(&ddcci_driver);
 	if (ret) {
@@ -1577,6 +1587,8 @@ static int __init ddcci_module_init(void)
 	return 0;
 
 err_drvreg:
+	destroy_workqueue(ddcci_workqueue);
+err_wqreg:
 	bus_unregister(&ddcci_bus_type);
 err_busreg:
 	unregister_chrdev_region(ddcci_cdev_first, 128);
@@ -1595,6 +1607,7 @@ static void __exit ddcci_module_exit(void)
 	}
 
 	i2c_del_driver(&ddcci_driver);
+	destroy_workqueue(ddcci_workqueue);
 	bus_unregister(&ddcci_bus_type);
 	unregister_chrdev_region(ddcci_cdev_first, 128);
 }
