@@ -167,12 +167,16 @@ static int ddcci_write(struct i2c_client *client, unsigned char addr,
 /*
  * Read a response from the DDC/CI bus with headers directly into a buffer.
  * Always check for DDCCI_QUIRK_SKIP_FIRST_BYTE when using this function.
+ * The returned length contains the whole unmodified response.
+ * If -EMSGSIZE is returned, the buffer contains the response up to `len`.
+ * If any other negative error code is returned, the buffer content is
+ * unspecified.
  */
 static int __ddcci_read(struct i2c_client *client, unsigned char addr,
 			bool p_flag, unsigned long quirks, unsigned char *buf,
 			unsigned char len)
 {
-	int i, payload_len, ret;
+	int i, payload_len, packet_length, ret;
 	unsigned char xor = DDCCI_HOST_ADDR_EVEN;
 
 	/* Consistency checks */
@@ -183,6 +187,7 @@ static int __ddcci_read(struct i2c_client *client, unsigned char addr,
 	ret = i2c_master_recv(client, buf, len);
 	if (ret < 0)
 		goto out_err;
+	packet_length = ret;
 
 	/* Skip first byte if quirk active */
 	if ((quirks & DDCCI_QUIRK_SKIP_FIRST_BYTE) && ret > 0 && len > 0) {
@@ -231,7 +236,7 @@ static int __ddcci_read(struct i2c_client *client, unsigned char addr,
 	}
 
 	/* return result */
-	ret = 3+payload_len;
+	ret = packet_length;
 
 out_err:
 	return ret;
