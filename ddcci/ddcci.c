@@ -1339,7 +1339,6 @@ static int ddcci_detect_device(struct i2c_client *client, unsigned char addr,
 	/* Setup chardev */
 	down(&core_lock);
 	ret = ddcci_setup_char_device(device);
-	up(&core_lock);
 	if (ret) goto err_free;
 
 	/* Add device */
