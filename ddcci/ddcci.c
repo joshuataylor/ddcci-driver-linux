@@ -442,7 +442,7 @@ static int ddcci_identify_device(struct i2c_client* client, unsigned char addr,
 	/* get and check payload length */
 	payload_len = buffer[1] & 0x7F;
 	if (3+payload_len > ret) {
-		return -EMSGSIZE;
+		return -EBADMSG;
 	}
 
 	/* calculate checksum */
@@ -462,9 +462,14 @@ static int ddcci_identify_device(struct i2c_client* client, unsigned char addr,
 	bus_drv_data->quirks = quirks;
 
 	/* return result */
-	ret = payload_len;
-	memcpy(buf, &buffer[2], payload_len);
-	return payload_len;
+	if (payload_len <= len) {
+		ret = payload_len;
+		memcpy(buf, &buffer[2], payload_len);
+	} else {
+		ret = -EMSGSIZE;
+		memcpy(buf, &buffer[2], len);
+	}
+	return ret;
 }
 
 /* Character device */
