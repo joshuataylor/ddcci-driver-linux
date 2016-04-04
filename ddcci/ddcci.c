@@ -305,7 +305,7 @@ static int ddcci_get_caps(struct i2c_client* client, unsigned char addr,
 {
 	int result = 0, counter = 0, offset = 0;
 	unsigned char cmd[3] = { DDCCI_COMMAND_CAPS, 0x00, 0x00};
-	unsigned char *chunkbuf = kzalloc(32, GFP_KERNEL);
+	unsigned char *chunkbuf = kzalloc(35, GFP_KERNEL);
 
 	if (!chunkbuf) {
 		return -ENOMEM;
@@ -319,7 +319,7 @@ static int ddcci_get_caps(struct i2c_client* client, unsigned char addr,
 		msleep(delay);
 		/* read result chunk */
 		result = ddcci_read(client, addr, true, chunkbuf,
-				    (len > 35) ? 35 : len);
+				    (len > 32) ? 35 : len+3);
 		if (result < 0)
 			goto err_free;
 
