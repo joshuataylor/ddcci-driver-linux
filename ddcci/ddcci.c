@@ -1193,7 +1193,7 @@ struct bus_type ddcci_bus_type = {
 
 /* Main I2C driver */
 
-static char *ddcci_capstr_tok(const char *s, const char *tag)
+static char *ddcci_capstr_tok(const char *s)
 {
 	const char *ptr = s;
 	char *end;
@@ -1229,7 +1229,7 @@ static char *ddcci_cpy_capstr_item(char *dest, const char *src, const char *tag,
 
 	src += taglen+1;
 
-	ptr = ddcci_capstr_tok(src, tag);
+	ptr = ddcci_capstr_tok(src);
 	if (!ptr) return ERR_PTR(-EINVAL);
 
 	len = ptr-src;
@@ -1576,7 +1576,6 @@ static struct i2c_driver ddcci_driver = {
 static int __init ddcci_module_init(void)
 {
 	int ret;
-
 	/* Allocate a device number region for the character devices */
 	ret = alloc_chrdev_region(&ddcci_cdev_first, 0, 128, DEVICE_NAME);
 	if (ret < 0) {
