@@ -154,6 +154,9 @@ static int ddcci_write(struct i2c_client *client, unsigned char addr,
 
 	drv_data = i2c_get_clientdata(client);
 
+	
+	pr_debug("sending to %d:%02x:%02x: %*ph\n", client->adapter->nr,
+	         client->addr << 1, addr, len, data);
 	if (drv_data->quirks & DDCCI_QUIRK_WRITE_BYTEWISE) {
 		ret = __ddcci_write_bytewise(client, addr, p_flag, data, len);
 	} else {
@@ -278,7 +281,14 @@ static int ddcci_read(struct i2c_client *client, unsigned char addr, bool p_flag
 
 			if (ret > len) {
 				/* if message was truncated, return -EMSGSIZE */
+				pr_debug("received from %d:%02x:%02x: [%u/%u] %*ph ...\n",
+			         client->adapter->nr, client->addr << 1, addr,
+			         ret, len, len, buf);
 				ret = -EMSGSIZE;
+			} else {
+				pr_debug("received from %d:%02x:%02x: [%u/%u] %*ph\n",
+			         client->adapter->nr, client->addr << 1, addr,
+			         ret, len, ret, buf);
 			}
 		}
 	}
