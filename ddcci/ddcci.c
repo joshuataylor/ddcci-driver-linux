@@ -215,6 +215,9 @@ static int __ddcci_read(struct i2c_client *client, unsigned char addr,
 
 	/* get and check payload length */
 	payload_len = buf[1] & 0x7F;
+	if (3+payload_len > packet_length) {
+		return -EBADMSG;
+	}
 	if (3+payload_len > len) {
 		return -EMSGSIZE;
 	}
@@ -233,7 +236,7 @@ static int __ddcci_read(struct i2c_client *client, unsigned char addr,
 	}
 
 	/* return result */
-	ret = packet_length;
+	ret = payload_len;
 
 out_err:
 	return ret;
