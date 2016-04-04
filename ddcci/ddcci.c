@@ -683,12 +683,14 @@ static ssize_t ddcci_attr_capabilities_show(struct device *dev,
 		if (unlikely(len > PAGE_SIZE)) {
 			len = PAGE_SIZE;
 		}
-		memcpy(buf, device->capabilities, len);
 		if (len == 0) {
 			ret = len;
-		} else if (likely(len < PAGE_SIZE)) {
-			buf[len] = '\n';
-			ret = len+1;
+		} else {
+			memcpy(buf, device->capabilities, len);
+			if (likely(len < PAGE_SIZE)) {
+				buf[len] = '\n';
+				ret = len+1;
+			}
 		}
 	}
 
