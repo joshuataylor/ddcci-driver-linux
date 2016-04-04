@@ -239,7 +239,7 @@ static int __ddcci_read(struct i2c_client *client, unsigned char addr,
 	}
 
 	/* return result */
-	ret = payload_len;
+	ret = payload_len+3+((quirks & DDCCI_QUIRK_SKIP_FIRST_BYTE)?1:0);
 
 out_err:
 	return ret;
