@@ -16,7 +16,7 @@
 # along with ddcci-bus-linux.  If not, see <http://www.gnu.org/licenses/>.
 
 MODULE_NAME := ddcci-backlight
-MODULE_VERSION := 0.1
+MODULE_VERSION := 0.2
 
 KVER := $(shell uname -r)
 KERNEL_MODLIB := /lib/modules/$(KVER)

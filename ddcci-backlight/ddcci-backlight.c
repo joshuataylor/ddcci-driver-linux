@@ -18,7 +18,6 @@
 
 #include <linux/ddcci.h>
 
-#define DEVICE_NAME "ddcci-backlight"
 
 #define DDCCI_COMMAND_READ	0x01	/* read ctrl value */
 #define DDCCI_REPLY_READ	0x02	/* read ctrl value reply */
@@ -208,7 +207,7 @@ module_ddcci_driver(ddcci_monitor_driver);
 
 MODULE_AUTHOR("Christoph Grenz");
 MODULE_DESCRIPTION("DDC/CI generic monitor backlight driver");
-MODULE_VERSION("0.1");
+MODULE_VERSION("0.2");
 MODULE_LICENSE("GPL");
 
 MODULE_ALIAS("ddcci:monitor-*-*-*-*");
