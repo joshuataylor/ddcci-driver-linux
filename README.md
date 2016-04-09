@@ -98,7 +98,7 @@ Lower layers may pass error codes not in this list like ENXIO, so be prepared fo
 
 ## ddcci-backlight (monitor backlight driver) ##
 
-For each monitor that supports accessing the Luminance property, a backlight device of type "raw" named like the corresponding ddcci device is created. You can find them
+For each monitor that supports accessing the Backlight Level White or the Luminance property, a backlight device of type "raw" named like the corresponding ddcci device is created. You can find them
 in `/sys/class/backlight/`.
 
 ## Limitations ##
@@ -110,11 +110,10 @@ You can force detection of internal dependent devices by setting the `autoprobe_
 You can force detection of external dependent devices by writing "ddcci-dependent [address]" into
 /sys/bus/i2c/i2c-?/new_device.
 
-Currently only the Luminance setting is used by ddcci-backlight. There seems to be a setting called "Backlight Control"
-(0x13) but I don't own a monitor supporting this VCP, so I couldn't test it.
-
 There is no direct synchronization if you manually change the luminance with the buttons on your monitor, as this can
 only be realized through polling and some monitors close their OSD every time a DDC/CI command is received.
+
+Monitor hotplugging is not detected. You need to detach/reattach the I²C driver or reload the module.
 
 ## Installation ##
 

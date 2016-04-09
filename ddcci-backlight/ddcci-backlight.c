@@ -26,6 +26,7 @@
 
 #define DDCCI_MONITOR_LUMINANCE	0x10
 #define DDCCI_MONITOR_BACKLIGHT	0x13
+#define DDCCI_MONITOR_BL_WHITE		0x6B
 
 struct ddcci_monitor_drv_data {
 	struct ddcci_device *device;
@@ -101,7 +102,7 @@ static int ddcci_backlight_update_status(struct backlight_device *bl)
 	    bl->props.state & BL_CORE_FBBLANK)
 		brightness = 0;
 
-	ret = ddcci_monitor_writectrl(drv_data->device, DDCCI_MONITOR_LUMINANCE,
+	ret = ddcci_monitor_writectrl(drv_data->device, drv_data->used_vcp,
 				      brightness);
 	if (ret > 0) return 0;
 	return ret;
@@ -113,7 +114,7 @@ static int ddcci_backlight_get_brightness(struct backlight_device *bl)
 	int ret;
 	struct ddcci_monitor_drv_data *drv_data = bl_get_data(bl);
 
-	ret = ddcci_monitor_readctrl(drv_data->device, DDCCI_MONITOR_LUMINANCE,
+	ret = ddcci_monitor_readctrl(drv_data->device, drv_data->used_vcp,
 				     &value, &maxval);
 	if (ret < 0)
 		return ret;
@@ -147,16 +148,37 @@ static int ddcci_monitor_probe(struct ddcci_device *dev,
 	if (!drv_data) return -ENOMEM;
 	drv_data->device = dev;
 
-	/* Try getting luminance */
-	ret = ddcci_monitor_readctrl(drv_data->device, DDCCI_MONITOR_LUMINANCE,
+	/* Try getting backlight level */
+	ret = ddcci_monitor_readctrl(drv_data->device, DDCCI_MONITOR_BL_WHITE,
 				     &brightness, &max_brightness);
 	if (ret < 0) {
 		if (ret == -ENOTSUPP)
 			dev_info(&dev->dev,
-				 "monitor does not support reading luminance\n");
-		goto err_free;
+				 "monitor does not support reading backlight level\n");
+		else
+			goto err_free;
+	} else {
+		drv_data->used_vcp = DDCCI_MONITOR_BL_WHITE;
 	}
-	drv_data->used_vcp = DDCCI_MONITOR_LUMINANCE;
+
+	if (!drv_data->used_vcp) {
+		/* Try getting luminance */
+		ret = ddcci_monitor_readctrl(drv_data->device, DDCCI_MONITOR_LUMINANCE,
+						&brightness, &max_brightness);
+		if (ret < 0) {
+			if (ret == -ENOTSUPP)
+				dev_info(&dev->dev,
+					"monitor does not support reading luminance\n");
+			else
+				goto err_free;
+		} else {
+			drv_data->used_vcp = DDCCI_MONITOR_LUMINANCE;
+		}
+		drv_data->used_vcp = DDCCI_MONITOR_LUMINANCE;
+	}
+
+	if (!drv_data->used_vcp)
+		goto err_free;
 
 	/* Create brightness device */
 	memset(&props, 0, sizeof(props));
@@ -171,7 +193,8 @@ static int ddcci_monitor_probe(struct ddcci_device *dev,
 		dev_err(&dev->dev, "failed to register backlight\n");
 		return PTR_ERR(bl);
 	}
-	dev_info(&dev->dev, "registered luminance as backlight device %s\n",
+	dev_info(&dev->dev, "registered %s as backlight device %s\n",
+		 (drv_data->used_vcp == DDCCI_MONITOR_BL_WHITE) ? "backlight" : "luminance",
 		 dev_name(&dev->dev));
 
 	goto end;
