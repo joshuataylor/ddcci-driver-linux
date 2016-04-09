@@ -151,7 +151,7 @@ static int ddcci_write(struct i2c_client *client, unsigned char addr,
 
 	drv_data = i2c_get_clientdata(client);
 
-	
+
 	pr_debug("sending to %d:%02x:%02x: %*ph\n", client->adapter->nr,
 	         client->addr << 1, addr, len, data);
 	if (drv_data->quirks & DDCCI_QUIRK_WRITE_BYTEWISE) {
@@ -1190,16 +1190,18 @@ struct bus_type ddcci_bus_type = {
 
 /* Main I2C driver */
 
-static char *ddcci_capstr_tok(const char *s)
+/* Get a pointer to the closing parenthesis */
+static char *ddcci_capstr_tok(const char *s, int depth)
 {
 	const char *ptr = s;
 	char *end;
-	int depth = 0;
 
 	if (s == NULL || s[0] == '\0')
 		return NULL;
 
 	while ((end = strpbrk(ptr, "()"))) {
+		if (!end || depth == INT_MAX)
+			return NULL;
 		if (*end == '(')
 			depth++;
 		else if (depth > 0)
@@ -1211,51 +1213,70 @@ static char *ddcci_capstr_tok(const char *s)
 	return end;
 }
 
-static char *ddcci_cpy_capstr_item(char *dest, const char *src, const char *tag,
-				   size_t maxlen)
+/* Search the capability string for a tag and copy the value to dest */
+static int ddcci_cpy_capstr_item(char *dest, const char *src,
+				  const char *tag, size_t maxlen)
 {
 	char *ptr;
 	ptrdiff_t len;
 	int taglen = strlen(tag);
 
-	/* Check if starts with tag */
-	if (strncmp(src, tag, taglen) != 0)
-		return ERR_PTR(-EINVAL);
-	if (src[taglen] != '(')
-		return ERR_PTR(-EINVAL);
+	/* Find tag */
+	while (src && (strncmp(src+1, tag, taglen) != 0 || src[1+taglen] != '('))
+		src = ddcci_capstr_tok(src+1, -1);
+	if (!src || src[0] == '\0')
+		return -ENOENT;
 
-	src += taglen+1;
+	/* Locate end of value */
+	src += taglen+2;
+	ptr = ddcci_capstr_tok(src, 0);
+	if (unlikely(!ptr))
+		return -EOVERFLOW;
 
-	ptr = ddcci_capstr_tok(src);
-	if (!ptr) return ERR_PTR(-EINVAL);
-
+	/* Copy value */
 	len = ptr-src;
-	if (unlikely(len < 0 || len > 65535)) return ERR_PTR(-EMSGSIZE);
+	if (unlikely(len < 0 || len > 65535))
+		return -EMSGSIZE;
 	memcpy(dest, src, (len<maxlen) ? len : maxlen);
-	return ++ptr;
+	return 0;
 }
 
 /* Fill fields in device by parsing the capability string */
 static int ddcci_parse_capstring(struct ddcci_device *device)
 {
-	char *ptr = device->capabilities;
-	if (!ptr) return -EINVAL;
+	const char *capstr = device->capabilities;
+	int ret = 0;
+	if (!capstr) return -EINVAL;
 
 	/* capability string start with a paren */
-	if (ptr[0] != '(') return -EINVAL;
-	ptr++;
+	if (capstr[0] != '(') return -EINVAL;
 
-	/* then comes prot(...) */
-	ptr = ddcci_cpy_capstr_item(device->prot, ptr, "prot", 8);
-	if (IS_ERR(ptr)) return PTR_ERR(ptr);
+	/* get prot(...) */
+	ret = ddcci_cpy_capstr_item(device->prot, capstr, "prot", 8);
+	if (ret)
+		return ret;
 
-	/* then type(...) */
-	ptr = ddcci_cpy_capstr_item(device->type, ptr, "type", 8);
-	if (IS_ERR(ptr)) return PTR_ERR(ptr);
+	/* get type(...) */
+	ret = ddcci_cpy_capstr_item(device->type, capstr, "type", 8);
+	if (ret) {
+		if (ret == -ENOENT) {
+			dev_warn(&device->dev, "malformed capability string: no type tag");
+			memset(device->type, 0, 8);
+		} else {
+			return ret;
+		}
+	}
 
 	/* and then model(...) */
-	ptr = ddcci_cpy_capstr_item(device->model, ptr, "model", 8);
-	if (IS_ERR(ptr)) return PTR_ERR(ptr);
+	ret = ddcci_cpy_capstr_item(device->model, capstr, "model", 8);
+	if (ret) {
+		if (ret == -ENOENT) {
+			dev_warn(&device->dev, "malformed capability string: no model tag");
+			memset(device->model, 0, 8);
+		} else {
+			return ret;
+		}
+	}
 
 	/* skip the rest for now */
 
@@ -1345,7 +1366,9 @@ static int ddcci_detect_device(struct i2c_client *client, unsigned char addr,
 		device->capabilities_len = ret;
 		memcpy(device->capabilities, buffer, ret);
 
-		if (ddcci_parse_capstring(device)) {
+		if ((ret = ddcci_parse_capstring(device))) {
+			dev_err(&device->dev, "malformed capability string: %d", ret);
+			ret = -EINVAL;
 			goto err_free;
 		}
 	}
