@@ -612,7 +612,7 @@ static loff_t ddcci_cdev_seek(struct file *filp, loff_t offset, int anchor)
 	return -EINVAL;
 }
 
-static struct file_operations ddcci_fops = {
+static const struct file_operations ddcci_fops = {
 	.owner = THIS_MODULE,
 	.read = ddcci_cdev_read,
 	.write = ddcci_cdev_write,
@@ -1555,7 +1555,7 @@ static int ddcci_remove(struct i2c_client *client)
 	return 0;
 }
 
-static struct i2c_device_id ddcci_idtable[] = {
+static const struct i2c_device_id ddcci_idtable[] = {
 	{ "ddcci", 0 },
 	{ "ddcci-dependent", 1 },
 	{}
