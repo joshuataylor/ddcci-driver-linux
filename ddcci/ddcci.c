@@ -12,7 +12,6 @@
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
-#include <asm/uaccess.h>
 #include <asm-generic/fcntl.h>
 #include <linux/cdev.h>
 #include <linux/delay.h>
@@ -24,6 +23,7 @@
 #include <linux/rwsem.h>
 #include <linux/sem.h>
 #include <linux/slab.h>
+#include <linux/uaccess.h>
 
 #include <linux/ddcci.h>
 
@@ -72,22 +72,22 @@ static int __ddcci_write_bytewise(struct i2c_client *client, unsigned char addr,
 
 	/* first byte: sender address */
 	xor ^= addr;
-	if ((ret = i2c_smbus_write_byte(client, addr)) < 0) {
+	ret = i2c_smbus_write_byte(client, addr);
+	if (ret < 0)
 		return ret;
-	}
 
 	/* second byte: protocol flag and message size */
 	xor ^= ((p_flag << 7) | len);
-	if ((ret = i2c_smbus_write_byte(client, (p_flag << 7)|len)) < 0) {
+	ret = i2c_smbus_write_byte(client, (p_flag << 7)|len);
+	if (ret < 0)
 		return ret;
-	}
 
 	/* send payload */
 	while (len--) {
 		xor ^= (*buf);
-		if ((ret = i2c_smbus_write_byte(client, (*buf))) < 0) {
+		ret = i2c_smbus_write_byte(client, (*buf));
+		if (ret < 0)
 			return ret;
-		}
 		buf++;
 	}
 
@@ -153,7 +153,7 @@ static int ddcci_write(struct i2c_client *client, unsigned char addr,
 
 
 	pr_debug("sending to %d:%02x:%02x: %*ph\n", client->adapter->nr,
-	         client->addr << 1, addr, len, data);
+		 client->addr << 1, addr, len, data);
 	if (drv_data->quirks & DDCCI_QUIRK_WRITE_BYTEWISE) {
 		ret = __ddcci_write_bytewise(client, addr, p_flag, data, len);
 	} else {
@@ -204,7 +204,7 @@ static int __ddcci_read(struct i2c_client *client, unsigned char addr,
 
 	/* validate first byte */
 	if (unlikely(buf[0] != addr)) {
-		ret = (buf[0] == '\0') ? -EAGAIN: -EIO;
+		ret = (buf[0] == '\0') ? -EAGAIN : -EIO;
 		goto out_err;
 	}
 
@@ -218,17 +218,14 @@ static int __ddcci_read(struct i2c_client *client, unsigned char addr,
 
 	/* get and check payload length */
 	payload_len = buf[1] & 0x7F;
-	if (3+payload_len > packet_length) {
+	if (3+payload_len > packet_length)
 		return -EBADMSG;
-	}
-	if (3+payload_len > len) {
+	if (3+payload_len > len)
 		return -EMSGSIZE;
-	}
 
 	/* calculate checksum */
-	for (i = 0; i < 3+payload_len; i++) {
+	for (i = 0; i < 3+payload_len; i++)
 		xor ^= buf[i];
-	}
 
 	/* verify checksum */
 	if (xor != 0) {
@@ -250,8 +247,8 @@ out_err:
  *
  * You must hold the bus semaphore when calling this function.
  */
-static int ddcci_read(struct i2c_client *client, unsigned char addr, bool p_flag,
-		      unsigned char *buf, unsigned char len)
+static int ddcci_read(struct i2c_client *client, unsigned char addr,
+		      bool p_flag, unsigned char *buf, unsigned char len)
 {
 	struct ddcci_bus_drv_data *drv_data;
 	unsigned char *recvbuf;
@@ -279,13 +276,13 @@ static int ddcci_read(struct i2c_client *client, unsigned char addr, bool p_flag
 			if (ret > len) {
 				/* if message was truncated, return -EMSGSIZE */
 				pr_debug("received from %d:%02x:%02x: [%u/%u] %*ph ...\n",
-			         client->adapter->nr, client->addr << 1, addr,
-			         ret, len, len, buf);
+					 client->adapter->nr, client->addr << 1,
+					 addr, ret, len, len, buf);
 				ret = -EMSGSIZE;
 			} else {
 				pr_debug("received from %d:%02x:%02x: [%u/%u] %*ph\n",
-			         client->adapter->nr, client->addr << 1, addr,
-			         ret, len, ret, buf);
+					 client->adapter->nr, client->addr << 1,
+					 addr, ret, len, ret, buf);
 			}
 		}
 	}
@@ -297,16 +294,15 @@ static int ddcci_read(struct i2c_client *client, unsigned char addr, bool p_flag
 }
 
 /* Request the capability string for a device and put it into buf */
-static int ddcci_get_caps(struct i2c_client* client, unsigned char addr,
+static int ddcci_get_caps(struct i2c_client *client, unsigned char addr,
 			  unsigned char *buf, unsigned int len)
 {
 	int result = 0, counter = 0, offset = 0;
 	unsigned char cmd[3] = { DDCCI_COMMAND_CAPS, 0x00, 0x00};
 	unsigned char *chunkbuf = kzalloc(35, GFP_KERNEL);
 
-	if (!chunkbuf) {
+	if (!chunkbuf)
 		return -ENOMEM;
-	}
 
 	do {
 		/* Send command */
@@ -360,7 +356,7 @@ err_free:
  * The identification command will fail on most DDC devices, as it is optional
  * to support, but even the "failed" response suffices to detect quirks.
  */
-static int ddcci_identify_device(struct i2c_client* client, unsigned char addr,
+static int ddcci_identify_device(struct i2c_client *client, unsigned char addr,
 				 unsigned char *buf, unsigned char len)
 {
 	int i, payload_len, ret = -ENODEV;
@@ -388,19 +384,18 @@ static int ddcci_identify_device(struct i2c_client* client, unsigned char addr,
 			msleep(delay);
 		}
 	}
-	if (ret < 0 && (quirks & DDCCI_QUIRK_WRITE_BYTEWISE)) {
+	if (ret < 0 && (quirks & DDCCI_QUIRK_WRITE_BYTEWISE))
 		ret = __ddcci_write_bytewise(client, addr, true, cmd, 2);
-	}
-	if (ret < 0) {
+	if (ret < 0)
 		return -ENODEV;
-	}
 
 	/* Wait */
 	msleep(delay);
 
 	/* Receive response */
 	ret = i2c_master_recv(client, buffer, DDCCI_RECV_BUFFER_SIZE);
-	if (ret < 3) return -ENODEV;
+	if (ret < 3)
+		return -ENODEV;
 
 	/* Skip first byte if quirk already active */
 	if (quirks & DDCCI_QUIRK_SKIP_FIRST_BYTE) {
@@ -409,14 +404,12 @@ static int ddcci_identify_device(struct i2c_client* client, unsigned char addr,
 	}
 
 	/* If answer too short (= incomplete) break out */
-	if (ret < 3) {
+	if (ret < 3)
 		return -EIO;
-	}
 
 	/* validate first byte */
-	if (buffer[0] != addr) {
+	if (buffer[0] != addr)
 		return -ENODEV;
-	}
 
 	/* Check if first byte is doubled (QUIRK_SKIP_FIRST_BYTE) */
 	if (!(quirks & DDCCI_QUIRK_SKIP_FIRST_BYTE)) {
@@ -426,9 +419,8 @@ static int ddcci_identify_device(struct i2c_client* client, unsigned char addr,
 				"DDC/CI bus quirk detected: doubled first byte on read\n");
 			ret--;
 			buffer++;
-			if (ret < 3) {
+			if (ret < 3)
 				return -EIO;
-			}
 		}
 	}
 
@@ -441,14 +433,12 @@ static int ddcci_identify_device(struct i2c_client* client, unsigned char addr,
 
 	/* get and check payload length */
 	payload_len = buffer[1] & 0x7F;
-	if (3+payload_len > ret) {
+	if (3+payload_len > ret)
 		return -EBADMSG;
-	}
 
 	/* calculate checksum */
-	for (i = 0; i < 3+payload_len; i++) {
+	for (i = 0; i < 3+payload_len; i++)
 		xor ^= buffer[i];
-	}
 
 	/* verify checksum */
 	if (xor != 0) {
@@ -482,7 +472,7 @@ struct ddcci_fp_data {
 };
 
 /* Called when the character device is opened */
-static int ddcci_cdev_open(struct inode* inode, struct file* filp)
+static int ddcci_cdev_open(struct inode *inode, struct file *filp)
 {
 	struct ddcci_device *dev = container_of(inode->i_cdev,
 						struct ddcci_device, cdev);
@@ -490,9 +480,8 @@ static int ddcci_cdev_open(struct inode* inode, struct file* filp)
 
 	fp_data = kzalloc(sizeof(struct ddcci_fp_data), GFP_KERNEL);
 
-	if (!fp_data) {
+	if (!fp_data)
 		return -ENOMEM;
-	}
 
 	fp_data->exclusive = filp->f_flags & O_EXCL;
 
@@ -515,16 +504,15 @@ static int ddcci_cdev_open(struct inode* inode, struct file* filp)
 }
 
 /* Called when the character device is closed */
-static int ddcci_cdev_close(struct inode* inode, struct file* filp)
+static int ddcci_cdev_close(struct inode *inode, struct file *filp)
 {
 	struct ddcci_fp_data *fp_data = filp->private_data;
 	struct ddcci_device *dev = fp_data->dev;
 
-	if (fp_data->exclusive) {
+	if (fp_data->exclusive)
 		up_write(&dev->cdev_sem);
-	} else {
+	else
 		up_read(&dev->cdev_sem);
-	}
 
 	filp->private_data = NULL;
 	kfree(fp_data);
@@ -532,8 +520,8 @@ static int ddcci_cdev_close(struct inode* inode, struct file* filp)
 }
 
 /* Called when reading from the character device */
-static ssize_t ddcci_cdev_read(struct file* filp, char __user *buffer,
-			       size_t length, loff_t* offset)
+static ssize_t ddcci_cdev_read(struct file *filp, char __user *buffer,
+			       size_t length, loff_t *offset)
 {
 	struct ddcci_fp_data *fp_data = filp->private_data;
 	struct ddcci_device *dev = fp_data->dev;
@@ -541,9 +529,8 @@ static ssize_t ddcci_cdev_read(struct file* filp, char __user *buffer,
 	const bool nonblocking = (filp->f_flags & O_NONBLOCK) != 0;
 	int ret = 0;
 
-	if ((filp->f_mode & FMODE_READ) == 0) {
+	if ((filp->f_mode & FMODE_READ) == 0)
 		return -EBADF;
-	}
 
 	/* Lock mutex */
 	if (nonblocking) {
@@ -581,13 +568,11 @@ static ssize_t ddcci_cdev_write(struct file *filp, const char __user *buffer,
 	const bool nonblocking = (filp->f_flags & O_NONBLOCK) != 0;
 	int ret = 0;
 
-	if ((filp->f_mode & FMODE_WRITE) == 0) {
+	if ((filp->f_mode & FMODE_WRITE) == 0)
 		return -EBADF;
-	}
 
-	if (count > 127) {
+	if (count > 127)
 		return -EINVAL;
-	}
 
 	/* Lock mutex */
 	if (nonblocking) {
@@ -680,9 +665,8 @@ static ssize_t ddcci_attr_capabilities_show(struct device *dev,
 
 	if (likely(device != NULL)) {
 		len = device->capabilities_len;
-		if (unlikely(len > PAGE_SIZE)) {
+		if (unlikely(len > PAGE_SIZE))
 			len = PAGE_SIZE;
-		}
 		if (len == 0) {
 			ret = len;
 		} else {
@@ -813,9 +797,9 @@ static ssize_t ddcci_attr_serial_show(struct device *dev,
 	struct ddcci_device *device = ddcci_verify_device(dev);
 	ssize_t ret = -ENOENT;
 
-	if (likely(device != NULL)) {
+	if (likely(device != NULL))
 		ret = scnprintf(buf, PAGE_SIZE, "%d\n", device->device_number);
-	}
+
 	return ret;
 }
 
@@ -897,9 +881,8 @@ static void ddcci_device_release(struct device *dev)
 	/* Teardown chardev */
 	if (dev->devt) {
 		down(&core_lock);
-		if (device->cdev.dev == ddcci_cdev_next-1) {
+		if (device->cdev.dev == ddcci_cdev_next-1)
 			ddcci_cdev_next--;
-		}
 		cdev_del(&device->cdev);
 		up(&core_lock);
 	}
@@ -969,8 +952,10 @@ static struct device_type ddcci_dependent_type = {
  */
 struct ddcci_device *ddcci_verify_device(struct device *dev)
 {
-	if (unlikely(dev == NULL)) return NULL;
-	return (dev->type == &ddcci_device_type || dev->type == &ddcci_dependent_type)
+	if (unlikely(!dev))
+		return NULL;
+	return (dev->type == &ddcci_device_type
+		|| dev->type == &ddcci_dependent_type)
 			? to_ddcci_device(dev)
 			: NULL;
 }
@@ -1045,9 +1030,9 @@ int ddcci_device_write(struct ddcci_device *dev, bool p_flag,
 {
 	int ret;
 
-	if (down_interruptible(&dev->bus_drv_data->sem)) {
+	if (down_interruptible(&dev->bus_drv_data->sem))
 		return -EAGAIN;
-	}
+
 	ret = ddcci_write(dev->bus_drv_data->i2c_dev, dev->inner_addr, p_flag, data, length);
 	msleep(delay);
 	up(&dev->bus_drv_data->sem);
@@ -1067,9 +1052,9 @@ int ddcci_device_read(struct ddcci_device *dev, bool p_flag,
 {
 	int ret;
 
-	if (down_interruptible(&dev->bus_drv_data->sem)) {
+	if (down_interruptible(&dev->bus_drv_data->sem))
 		return -EAGAIN;
-	}
+
 	ret = ddcci_read(dev->bus_drv_data->i2c_dev, dev->inner_addr, p_flag, buffer, length);
 	up(&dev->bus_drv_data->sem);
 	return ret;
@@ -1093,11 +1078,12 @@ int ddcci_device_writeread(struct ddcci_device *dev, bool p_flag,
 {
 	int ret;
 
-	if (down_interruptible(&dev->bus_drv_data->sem)) {
+	if (down_interruptible(&dev->bus_drv_data->sem))
 		return -EAGAIN;
-	}
+
 	ret = ddcci_write(dev->bus_drv_data->i2c_dev, dev->inner_addr, p_flag, buffer, length);
-	if (ret < 0) goto err;
+	if (ret < 0)
+		goto err;
 	msleep(delay);
 	ret = ddcci_read(dev->bus_drv_data->i2c_dev, dev->inner_addr, p_flag, buffer, maxlength);
 err:
@@ -1153,13 +1139,11 @@ static int ddcci_device_probe(struct device *dev)
 	driver = to_ddcci_driver(dev->driver);
 
 	id = ddcci_match_id(driver->id_table, device);
-	if (id == NULL) {
+	if (!id)
 		return -ENODEV;
-	}
 
-	if (driver->probe) {
+	if (driver->probe)
 		ret = driver->probe(device, id);
-	}
 
 	return ret;
 }
@@ -1174,9 +1158,8 @@ static int ddcci_device_remove(struct device *dev)
 		return -EINVAL;
 	driver = to_ddcci_driver(dev->driver);
 
-	if (driver->remove) {
+	if (driver->remove)
 		ret = driver->remove(device);
-	}
 
 	return ret;
 }
@@ -1237,7 +1220,7 @@ static int ddcci_cpy_capstr_item(char *dest, const char *src,
 	len = ptr-src;
 	if (unlikely(len < 0 || len > 65535))
 		return -EMSGSIZE;
-	memcpy(dest, src, (len<maxlen) ? len : maxlen);
+	memcpy(dest, src, (len < maxlen) ? len : maxlen);
 	return 0;
 }
 
@@ -1246,10 +1229,13 @@ static int ddcci_parse_capstring(struct ddcci_device *device)
 {
 	const char *capstr = device->capabilities;
 	int ret = 0;
-	if (!capstr) return -EINVAL;
+
+	if (!capstr)
+		return -EINVAL;
 
 	/* capability string start with a paren */
-	if (capstr[0] != '(') return -EINVAL;
+	if (capstr[0] != '(')
+		return -EINVAL;
 
 	/* get prot(...) */
 	ret = ddcci_cpy_capstr_item(device->prot, capstr, "prot", 8);
@@ -1322,12 +1308,12 @@ static int ddcci_detect_device(struct i2c_client *client, unsigned char addr,
 		device->dev.type = &ddcci_device_type;
 		ret = dev_set_name(&device->dev, "ddcci%d", client->adapter->nr);
 	} else if (outer_addr == dependent) {
-		// Internal dependent device
+		/* Internal dependent device */
 		device->dev.type = &ddcci_dependent_type;
 		device->flags = DDCCI_FLAG_DEPENDENT;
 		ret = dev_set_name(&device->dev, "ddcci%di%02x", client->adapter->nr, addr);
 	} else if (outer_addr == addr) {
-		// External dependent device
+		/* External dependent device */
 		device->dev.type = &ddcci_dependent_type;
 		device->flags = DDCCI_FLAG_DEPENDENT | DDCCI_FLAG_EXTERNAL;
 		ret = dev_set_name(&device->dev, "ddcci%de%02x", client->adapter->nr, addr);
@@ -1339,19 +1325,17 @@ static int ddcci_detect_device(struct i2c_client *client, unsigned char addr,
 		ret = dev_set_name(&device->dev, "ddcci%de%02x%02x", client->adapter->nr, outer_addr, addr);
 	}
 
-	if (ret) {
+	if (ret)
 		goto err_free;
-	}
 
 	/* Read identification and check for quirks */
 	ret = ddcci_identify_device(client, addr, buffer, 29);
-	if (ret < 0) {
+	if (ret < 0)
 		goto err_free;
-	}
 	if (ret == 29 && buffer[0] == DDCCI_REPLY_ID) {
 		memcpy(device->vendor, &buffer[7], 8);
 		memcpy(device->module, &buffer[17], 8);
-		device->device_number = ntohl(*(__s32*)&buffer[18]);
+		device->device_number = ntohl(*(__s32 *)&buffer[18]);
 	}
 
 	/* Read capabilities */
@@ -1360,13 +1344,13 @@ static int ddcci_detect_device(struct i2c_client *client, unsigned char addr,
 		device->capabilities = kzalloc(ret+1, GFP_KERNEL);
 		if (!device->capabilities) {
 			ret = -ENOMEM;
-
 			goto err_free;
 		}
 		device->capabilities_len = ret;
 		memcpy(device->capabilities, buffer, ret);
 
-		if ((ret = ddcci_parse_capstring(device))) {
+		ret = ddcci_parse_capstring(device);
+		if (ret) {
 			dev_err(&device->dev, "malformed capability string: %d", ret);
 			ret = -EINVAL;
 			goto err_free;
@@ -1382,12 +1366,14 @@ static int ddcci_detect_device(struct i2c_client *client, unsigned char addr,
 	/* Setup chardev */
 	down(&core_lock);
 	ret = ddcci_setup_char_device(device);
-	if (ret) goto err_free;
+	if (ret)
+		goto err_free;
 
 	/* Add device */
 	pr_debug("found device at %d:%02x:%02x\n", client->adapter->nr, outer_addr, addr);
 	ret = device_add(&device->dev);
-	if (ret) goto err_free;
+	if (ret)
+		goto err_free;
 
 	goto end;
 err_free:
@@ -1430,21 +1416,19 @@ static int ddcci_detect(struct i2c_client *client, struct i2c_board_info *info)
 		}
 	}
 
-	if (ret < 0) {
+	if (ret < 0)
 		return -ENODEV;
-	}
 
 	/* wait for device */
 	msleep(delay);
 	/* receive answer */
-	if ((ret = i2c_master_recv(client, buf, 32)) < 3) {
+	ret = i2c_master_recv(client, buf, 32);
+	if (ret < 3)
 		return -ENODEV;
-	}
 
 	/* check response starts with outer addr */
-	if (buf[0] != outer_addr) {
+	if (buf[0] != outer_addr)
 		return -ENODEV;
-	}
 
 	pr_debug("detected %d:%02x\n", client->adapter->nr, outer_addr);
 
@@ -1463,9 +1447,8 @@ static int ddcci_probe(struct i2c_client *client, const struct i2c_device_id *id
 
 	/* Initialize driver data structure */
 	drv_data = devm_kzalloc(&client->dev, sizeof(struct ddcci_bus_drv_data), GFP_KERNEL);
-	if (!drv_data) {
+	if (!drv_data)
 		return -ENOMEM;
-	}
 	drv_data->i2c_dev = client;
 	sema_init(&drv_data->sem, 1);
 
@@ -1477,7 +1460,8 @@ static int ddcci_probe(struct i2c_client *client, const struct i2c_device_id *id
 		main_addr = DDCCI_DEFAULT_DEVICE_ADDR;
 		dev_dbg(&client->dev, "probing core device [%02x]\n",
 			client->addr << 1);
-		if ((ret = ddcci_detect_device(client, main_addr, 0))) {
+		ret = ddcci_detect_device(client, main_addr, 0);
+		if (ret) {
 			dev_info(&client->dev, "core device [%02x] probe failed: %d\n",
 				 client->addr << 1, ret);
 			if (ret == -EIO)
@@ -1488,7 +1472,7 @@ static int ddcci_probe(struct i2c_client *client, const struct i2c_device_id *id
 		/* Detect internal dependent devices */
 		dev_dbg(&client->dev, "probing internal dependent devices\n");
 		for (i = 0; i < autoprobe_addr_count; ++i) {
-		addr = (unsigned short)autoprobe_addrs[i];
+			addr = (unsigned short)autoprobe_addrs[i];
 			if ((addr & 1) == 0 && addr != main_addr) {
 				tmp = ddcci_detect_device(client, addr, main_addr);
 				if (tmp < 0 && tmp != -ENODEV) {
@@ -1501,7 +1485,8 @@ static int ddcci_probe(struct i2c_client *client, const struct i2c_device_id *id
 		/* External dependent device */
 		main_addr = client->addr << 1;
 		dev_dbg(&client->dev, "probing external dependent device [%02x]\n", main_addr);
-		if ((ret = ddcci_detect_device(client, main_addr, -1))) {
+		ret = ddcci_detect_device(client, main_addr, -1);
+		if (ret) {
 			dev_info(&client->dev, "external dependent device [%02x] probe failed: %d\n",
 				 main_addr, ret);
 			if (ret == -EIO)
@@ -1527,19 +1512,19 @@ end:
  * Find next device with matching outer address not flagged with
  * DDCCI_FLAG_REMOVED and flag it.
  */
-static int ddcci_remove_helper(struct device *dev, void* p)
+static int ddcci_remove_helper(struct device *dev, void *p)
 {
 	unsigned char outer_addr;
 	struct ddcci_device *device;
 
 	if (p)
-		outer_addr = *(unsigned char*)p;
+		outer_addr = *(unsigned char *)p;
 	else
 		outer_addr = 0;
 
-
 	device = ddcci_verify_device(dev);
-	if (!device || device->flags & DDCCI_FLAG_REMOVED) return 0;
+	if (!device || device->flags & DDCCI_FLAG_REMOVED)
+		return 0;
 
 	if (!outer_addr || (device->outer_addr == outer_addr)) {
 		device->flags |= DDCCI_FLAG_REMOVED;
@@ -1561,7 +1546,8 @@ static int ddcci_remove(struct i2c_client *client)
 	while (1) {
 		dev = bus_find_device(&ddcci_bus_type, NULL, &outer_addr,
 				      ddcci_remove_helper);
-		if (!dev) break;
+		if (!dev)
+			break;
 		device_unregister(dev);
 		put_device(dev);
 	}
@@ -1632,9 +1618,11 @@ err_chrdevreg:
 static void __exit ddcci_module_exit(void)
 {
 	struct device *dev;
+
 	while (1) {
 		dev = bus_find_device(&ddcci_bus_type, NULL, NULL, ddcci_remove_helper);
-		if (!dev) break;
+		if (!dev)
+			break;
 		device_unregister(dev);
 		put_device(dev);
 	}

@@ -35,7 +35,7 @@ struct ddcci_monitor_drv_data {
 	unsigned char used_vcp;
 };
 
-static int ddcci_monitor_writectrl(struct ddcci_device* device,
+static int ddcci_monitor_writectrl(struct ddcci_device *device,
 				   unsigned char ctrl, unsigned short value)
 {
 	unsigned char buf[4];
@@ -51,7 +51,7 @@ static int ddcci_monitor_writectrl(struct ddcci_device* device,
 	return ret;
 }
 
-static int ddcci_monitor_readctrl(struct ddcci_device* device,
+static int ddcci_monitor_readctrl(struct ddcci_device *device,
 				  unsigned char ctrl, unsigned short *value,
 				  unsigned short *maximum)
 {
@@ -62,22 +62,23 @@ static int ddcci_monitor_readctrl(struct ddcci_device* device,
 	buf[1] = ctrl;
 
 	ret = ddcci_device_writeread(device, true, buf, 2, sizeof(buf));
-	if (ret < 0) return ret;
+	if (ret < 0)
+		return ret;
 
-	if (ret == 0) return -ENOTSUPP;
+	if (ret == 0)
+		return -ENOTSUPP;
 
-	if (ret == 8 && buf[0] == DDCCI_REPLY_READ && buf[2] == ctrl)
-	{
-		if (value) {
+	if (ret == 8 && buf[0] == DDCCI_REPLY_READ && buf[2] == ctrl) {
+		if (value)
 			*value = buf[6] * 256 + buf[7];
-		}
 
-		if (maximum) {
+		if (maximum)
 			*maximum = buf[4] * 256 + buf[5];
-		}
 
-		if (buf[1] == 1) return -ENOTSUPP;
-		if (buf[1] != 0) return -EIO;
+		if (buf[1] == 1)
+			return -ENOTSUPP;
+		if (buf[1] != 0)
+			return -EIO;
 		return 0;
 	}
 
@@ -104,7 +105,8 @@ static int ddcci_backlight_update_status(struct backlight_device *bl)
 
 	ret = ddcci_monitor_writectrl(drv_data->device, drv_data->used_vcp,
 				      brightness);
-	if (ret > 0) return 0;
+	if (ret > 0)
+		ret = 0;
 	return ret;
 }
 
@@ -145,7 +147,8 @@ static int ddcci_monitor_probe(struct ddcci_device *dev,
 	/* Initialize driver data structure */
 	drv_data = devm_kzalloc(&dev->dev, sizeof(struct ddcci_monitor_drv_data),
 				GFP_KERNEL);
-	if (!drv_data) return -ENOMEM;
+	if (!drv_data)
+		return -ENOMEM;
 	drv_data->device = dev;
 
 	/* Try getting backlight level */
@@ -164,7 +167,7 @@ static int ddcci_monitor_probe(struct ddcci_device *dev,
 	if (!drv_data->used_vcp) {
 		/* Try getting luminance */
 		ret = ddcci_monitor_readctrl(drv_data->device, DDCCI_MONITOR_LUMINANCE,
-						&brightness, &max_brightness);
+					     &brightness, &max_brightness);
 		if (ret < 0) {
 			if (ret == -ENOTSUPP)
 				dev_info(&dev->dev,
@@ -186,8 +189,8 @@ static int ddcci_monitor_probe(struct ddcci_device *dev,
 	props.max_brightness = max_brightness;
 	props.brightness = brightness;
 	bl = devm_backlight_device_register(&dev->dev, dev_name(&dev->dev),
-					&dev->dev, drv_data, &ddcci_backlight_ops,
-					&props);
+					    &dev->dev, drv_data,
+					    &ddcci_backlight_ops, &props);
 	drv_data->bl_dev = bl;
 	if (IS_ERR(bl)) {
 		dev_err(&dev->dev, "failed to register backlight\n");
