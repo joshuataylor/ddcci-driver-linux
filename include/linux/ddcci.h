@@ -68,7 +68,7 @@ struct ddcci_device_id {
 	char module[9];
 	kernel_ulong_t driver_data;	/* Data private to the driver */
 };
-#define DDCCI_ANY_ID "\xFF\xFF\xFF\xFFx\xFF\xFF\xFF\xFF"
+#define DDCCI_ANY_ID "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
 
 /**
  * struct ddcci_device - represent an DDC/CI device
