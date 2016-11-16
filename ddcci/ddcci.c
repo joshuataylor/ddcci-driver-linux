@@ -1335,7 +1335,7 @@ static int ddcci_detect_device(struct i2c_client *client, unsigned char addr,
 	if (ret == 29 && buffer[0] == DDCCI_REPLY_ID) {
 		memcpy(device->vendor, &buffer[7], 8);
 		memcpy(device->module, &buffer[17], 8);
-		device->device_number = ntohl(*(__s32 *)&buffer[18]);
+		device->device_number = be32_to_cpu(*(__force __be32 *)&buffer[18]);
 	}
 
 	/* Read capabilities */
