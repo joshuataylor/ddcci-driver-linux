@@ -31,8 +31,8 @@
 #define DEVICE_NAME "ddcci"
 
 static unsigned int delay = 60;
-unsigned short autoprobe_addrs[127] = {0xF0, 0xF2, 0xF4, 0xF6, 0xF8};
-int autoprobe_addr_count = 5;
+static unsigned short autoprobe_addrs[127] = {0xF0, 0xF2, 0xF4, 0xF6, 0xF8};
+static int autoprobe_addr_count = 5;
 
 static dev_t ddcci_cdev_first;
 static dev_t ddcci_cdev_next;
