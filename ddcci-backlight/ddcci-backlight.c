@@ -218,9 +218,9 @@ static struct ddcci_device_id ddcci_monitor_idtable[] = {
 	{}
 };
 
-static struct ddcci_driver ddcci_monitor_driver = {
+static struct ddcci_driver ddcci_backlight_driver = {
 	.driver = {
-		.name	= "ddcci-monitor",
+		.name	= "ddcci-backlight",
 		.owner	= THIS_MODULE,
 	},
 
@@ -229,7 +229,7 @@ static struct ddcci_driver ddcci_monitor_driver = {
 	.remove		= ddcci_monitor_remove,
 };
 
-module_ddcci_driver(ddcci_monitor_driver);
+module_ddcci_driver(ddcci_backlight_driver);
 
 MODULE_AUTHOR("Christoph Grenz");
 MODULE_DESCRIPTION("DDC/CI generic monitor backlight driver");
