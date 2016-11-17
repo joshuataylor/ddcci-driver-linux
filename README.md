@@ -118,3 +118,14 @@ Monitor hotplugging is not detected. You need to detach/reattach the I²C driver
 ## Installation ##
 
 Generally, you only need to clone the repository and run make to build both kernel modules, then run make load. To permanently install the drivers, use `make install` (or `make -f Makefile.dkms install` if you prefer DKMS).
+
+## Debugging ##
+
+Both drivers use the [dynamic debugging feature](https://www.kernel.org/doc/Documentation/dynamic-debug-howto.txt) of the Linux kernel.
+
+To get detailed debugging messages, set the `dyndbg` module parameter. For details on the syntax and for dynamic activation/deactivation of the debugging messages, see the documentation linked above.
+
+If you want to enable debugging permanently across reboots, create a file `/etc/modprobe.d/ddcci.conf` containing lines like the following before loading the modules:
+
+	options ddcci dyndbg
+	options ddcci-backlight dyndbg
