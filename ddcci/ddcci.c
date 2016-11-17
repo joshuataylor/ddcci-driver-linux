@@ -42,6 +42,7 @@ static DEFINE_SEMAPHORE(core_lock);
 struct bus_type ddcci_bus_type;
 EXPORT_SYMBOL_GPL(ddcci_bus_type);
 
+/* Internal per-i2c-client driver data */
 struct ddcci_bus_drv_data {
 	unsigned long quirks;
 	struct i2c_client *i2c_dev;
@@ -1165,6 +1166,9 @@ static int ddcci_device_remove(struct device *dev)
 	return ret;
 }
 
+/**
+ * DDCCI bus type structure
+ */
 struct bus_type ddcci_bus_type = {
 	.name		= "ddcci",
 	.match		= ddcci_device_match,
@@ -1562,14 +1566,19 @@ static int ddcci_remove(struct i2c_client *client)
 	return 0;
 }
 
+/*
+ * I2C driver device identification table.
+ */
 static const struct i2c_device_id ddcci_idtable[] = {
 	{ "ddcci", 0 },
 	{ "ddcci-dependent", 1 },
 	{}
 };
-
 MODULE_DEVICE_TABLE(i2c, ddcci_idtable);
 
+/*
+ * I2C driver description structure
+ */
 static struct i2c_driver ddcci_driver = {
 	.driver = {
 		.name	= "ddcci",
@@ -1586,6 +1595,10 @@ static struct i2c_driver ddcci_driver = {
 	),
 };
 
+/*
+ * Module initialization function. Called when the module is inserted or
+ * (if builtin) at boot time.
+ */
 static int __init ddcci_module_init(void)
 {
 	int ret;
@@ -1626,6 +1639,9 @@ err_chrdevreg:
 	return ret;
 }
 
+/*
+ * Module clean-up function. Called when the module is removed.
+ */
 static void __exit ddcci_module_exit(void)
 {
 	struct device *dev;
