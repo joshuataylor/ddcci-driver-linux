@@ -144,6 +144,8 @@ static int ddcci_monitor_probe(struct ddcci_device *dev,
 	int ret = 0;
 	unsigned short brightness = 0, max_brightness = 0;
 
+	dev_dbg(&dev->dev, "probing monitor backlight device\n");
+
 	/* Initialize driver data structure */
 	drv_data = devm_kzalloc(&dev->dev, sizeof(struct ddcci_monitor_drv_data),
 				GFP_KERNEL);

@@ -862,7 +862,6 @@ static int ddcci_device_uevent(struct device *dev, struct kobj_uevent_env *env)
 			return -ENOMEM;
 	}
 
-	dev_dbg(dev, "uevent\n");
 	return 0;
 }
 
@@ -987,6 +986,8 @@ int ddcci_register_driver(struct module *owner, struct ddcci_driver *driver)
 	/* Can't register until after driver model init */
 	if (unlikely(WARN_ON(!ddcci_bus_type.p)))
 		return -EAGAIN;
+
+	pr_debug("registering driver [%s]\n", driver->driver.name);
 
 	/* add the driver to the list of ddcci drivers in the driver core */
 	driver->driver.owner = owner;
@@ -1395,8 +1396,10 @@ static int ddcci_detect(struct i2c_client *client, struct i2c_board_info *info)
 	unsigned char cmd[2] = { DDCCI_COMMAND_ID, 0x00 };
 
 	/* Check for i2c_master_* functionality */
-	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C))
+	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
+		pr_debug("i2c adapter %d unsuitable: no i2c_master functionality\n", client->adapter->nr);
 		return -ENODEV;
+	}
 
 	/* send Identification Request command */
 	outer_addr = client->addr << 1;
@@ -1423,12 +1426,16 @@ static int ddcci_detect(struct i2c_client *client, struct i2c_board_info *info)
 	msleep(delay);
 	/* receive answer */
 	ret = i2c_master_recv(client, buf, 32);
-	if (ret < 3)
+	if (ret < 3) {
+		pr_debug("detection failed: no answer\n");
 		return -ENODEV;
+	}
 
 	/* check response starts with outer addr */
-	if (buf[0] != outer_addr)
+	if (buf[0] != outer_addr) {
+		pr_debug("detection failed: invalid answer\n");
 		return -ENODEV;
+	}
 
 	pr_debug("detected %d:%02x\n", client->adapter->nr, outer_addr);
 
@@ -1582,6 +1589,8 @@ static struct i2c_driver ddcci_driver = {
 static int __init ddcci_module_init(void)
 {
 	int ret;
+
+	pr_debug("initializing ddcci driver\n");
 	/* Allocate a device number region for the character devices */
 	ret = alloc_chrdev_region(&ddcci_cdev_first, 0, 128, DEVICE_NAME);
 	if (ret < 0) {
@@ -1604,6 +1613,8 @@ static int __init ddcci_module_init(void)
 		pr_err("failed to register i2c driver\n");
 		goto err_drvreg;
 	}
+
+	pr_debug("ddcci driver initialized\n");
 
 	return 0;
 
