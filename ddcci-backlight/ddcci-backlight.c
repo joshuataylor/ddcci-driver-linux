@@ -135,6 +135,18 @@ static const struct backlight_ops ddcci_backlight_ops = {
 	.check_fb	= ddcci_backlight_check_fb,
 };
 
+static const char *ddcci_monitor_vcp_name(unsigned char vcp)
+{
+	switch (vcp) {
+		case DDCCI_MONITOR_BL_WHITE:
+			return "backlight";
+		case DDCCI_MONITOR_LUMINANCE:
+			return "luminance";
+		default:
+			return "???";
+	}
+}
+
 static int ddcci_monitor_probe(struct ddcci_device *dev,
 			       const struct ddcci_device_id *id)
 {
@@ -199,7 +211,7 @@ static int ddcci_monitor_probe(struct ddcci_device *dev,
 		return PTR_ERR(bl);
 	}
 	dev_info(&dev->dev, "registered %s as backlight device %s\n",
-		 (drv_data->used_vcp == DDCCI_MONITOR_BL_WHITE) ? "backlight" : "luminance",
+		 ddcci_monitor_vcp_name(drv_data->used_vcp),
 		 dev_name(&dev->dev));
 
 	goto end;
