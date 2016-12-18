@@ -1201,31 +1201,68 @@ static char *ddcci_capstr_tok(const char *s, int depth)
 	return end;
 }
 
-/* Search the capability string for a tag and copy the value to dest */
-static int ddcci_cpy_capstr_item(char *dest, const char *src,
-				  const char *tag, size_t maxlen)
+/**
+ * ddcci_find_capstr_item - Search capability string for a tag
+ * @capabilities: Capability string to search
+ * @tag: Tag to find
+ * @length: Buffer for the length of the found tag value (optional)
+ *
+ * Return a pointer to the start of the tag value (directly after the '(') on
+ * success and write the length of the value (excluding the ')') into `length`.
+ *
+ * If the tag is not found or another error occurs, an ERR_PTR is returned
+ * and `length` stays untouched.
+ */
+const char *ddcci_find_capstr_item(const char *capabilities, const char *tag,
+				    ptrdiff_t *length)
 {
-	char *ptr;
+	const char *src = capabilities, *ptr;
 	ptrdiff_t len;
 	int taglen = strlen(tag);
+
+	/* Check length of requested tag */
+	if (unlikely(taglen <= 0 || taglen > 65535))
+		return ERR_PTR(-EINVAL);
 
 	/* Find tag */
 	while (src && (strncmp(src+1, tag, taglen) != 0 || src[1+taglen] != '('))
 		src = ddcci_capstr_tok(src+1, -1);
 	if (!src || src[0] == '\0')
-		return -ENOENT;
+		return ERR_PTR(-ENOENT);
 
 	/* Locate end of value */
 	src += taglen+2;
 	ptr = ddcci_capstr_tok(src, 0);
 	if (unlikely(!ptr))
-		return -EOVERFLOW;
+		return ERR_PTR(-EOVERFLOW);
 
-	/* Copy value */
+	/* Check length of tag data */
 	len = ptr-src;
 	if (unlikely(len < 0 || len > 65535))
-		return -EMSGSIZE;
-	memcpy(dest, src, (len < maxlen) ? len : maxlen);
+		return ERR_PTR(-EMSGSIZE);
+
+	/* Return pointer and length */
+	if (likely(length != NULL))
+		*length = len;
+	return src;
+}
+EXPORT_SYMBOL(ddcci_find_capstr_item);
+
+/* Search the capability string for a tag and copy the value to dest */
+static int ddcci_cpy_capstr_item(char *dest, const char *src,
+				  const char *tag, size_t maxlen)
+{
+	const char *ptr;
+	ptrdiff_t len;
+
+	/* Find tag */
+	ptr = ddcci_find_capstr_item(src, tag, &len);
+	if (IS_ERR(ptr)) {
+		return PTR_ERR(ptr);
+	}
+
+	/* Copy value */
+	memcpy(dest, ptr, (len < maxlen) ? len : maxlen);
 	return 0;
 }
 
