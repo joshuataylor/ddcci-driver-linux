@@ -147,6 +147,66 @@ static const char *ddcci_monitor_vcp_name(unsigned char vcp)
 	}
 }
 
+static const char *ddcci_monitor_next_vcp_item(const char *ptr)
+{
+	int depth = 0;
+
+	/* Sanity check */
+	if (unlikely(ptr == NULL || ptr[0] == '\0'))
+		return NULL;
+
+	/* Find next white space outside of parentheses */
+	while ((ptr = strpbrk(ptr, " ()"))) {
+		if (!ptr || depth == INT_MAX) {
+			return NULL;
+		} else if (*ptr == '(') {
+			depth++;
+		} else if (depth > 0) {
+			if (*ptr == ')')
+				depth--;
+		} else {
+			break;
+		}
+		++ptr;
+	}
+
+	/* Skip over whitespace */
+	ptr = skip_spaces(ptr);
+
+	/* Check if we're now at the end of the list */
+	if (unlikely(*ptr == '\0' || *ptr == ')'))
+		return NULL;
+
+	return ptr;
+}
+
+static bool ddcci_monitor_find_vcp(unsigned char vcp, const char *s)
+{
+	const char *ptr = s;
+	char vcp_hex[3];
+
+	/* Sanity check */
+	if (unlikely(s == NULL || s[0] == '\0'))
+		return false;
+
+	/* Create hex representation of VCP */
+	if (unlikely(snprintf(vcp_hex, 3, "%02hhX", vcp) != 2)) {
+		pr_err("snprintf failed to convert to hex. This should not happen.\n");
+		return false;
+	}
+
+	/* Search for it */
+	do {
+		if (strncasecmp(vcp_hex, ptr, 2) == 0) {
+			if (ptr[2] == ' ' || ptr[2] == '(' || ptr[2] == ')') {
+				return true;
+			}
+		}
+	} while ((ptr = ddcci_monitor_next_vcp_item(ptr)));
+
+	return false;
+}
+
 static int ddcci_monitor_probe(struct ddcci_device *dev,
 			       const struct ddcci_device_id *id)
 {
@@ -154,9 +214,29 @@ static int ddcci_monitor_probe(struct ddcci_device *dev,
 	struct backlight_properties props;
 	struct backlight_device *bl = NULL;
 	int ret = 0;
+	bool support_luminance, support_bl_white;
 	unsigned short brightness = 0, max_brightness = 0;
+	const char *vcps;
 
 	dev_dbg(&dev->dev, "probing monitor backlight device\n");
+
+	/* Get VCP list */
+	vcps = ddcci_find_capstr_item(dev->capabilities, "vcp", NULL);
+	if (IS_ERR(vcps)) {
+		dev_info(&dev->dev,
+			 "monitor doesn't provide a list of supported controls.\n");
+		support_bl_white = support_luminance = true;
+	} else {
+		/* Check VCP list for supported VCPs */
+		support_bl_white = ddcci_monitor_find_vcp(DDCCI_MONITOR_BL_WHITE, vcps);
+		support_luminance = ddcci_monitor_find_vcp(DDCCI_MONITOR_LUMINANCE, vcps);
+		/* Fallback to trying if no support is found */
+		if (!support_bl_white && !support_luminance) {
+			dev_info(&dev->dev,
+				 "monitor doesn't announce support for backlight or luminance controls.\n");
+			support_bl_white = support_luminance = true;
+		}
+	}
 
 	/* Initialize driver data structure */
 	drv_data = devm_kzalloc(&dev->dev, sizeof(struct ddcci_monitor_drv_data),
@@ -165,21 +245,27 @@ static int ddcci_monitor_probe(struct ddcci_device *dev,
 		return -ENOMEM;
 	drv_data->device = dev;
 
-	/* Try getting backlight level */
-	ret = ddcci_monitor_readctrl(drv_data->device, DDCCI_MONITOR_BL_WHITE,
-				     &brightness, &max_brightness);
-	if (ret < 0) {
-		if (ret == -ENOTSUPP)
-			dev_info(&dev->dev,
-				 "monitor does not support reading backlight level\n");
-		else
-			goto err_free;
-	} else {
-		drv_data->used_vcp = DDCCI_MONITOR_BL_WHITE;
+	if (support_bl_white) {
+		/* Try getting backlight level */
+		dev_dbg(&dev->dev,
+			"trying to access \"backlight level white\" control\n");
+		ret = ddcci_monitor_readctrl(drv_data->device, DDCCI_MONITOR_BL_WHITE,
+						&brightness, &max_brightness);
+		if (ret < 0) {
+			if (ret == -ENOTSUPP)
+				dev_info(&dev->dev,
+					"monitor does not support reading backlight level\n");
+			else
+				goto err_free;
+		} else {
+			drv_data->used_vcp = DDCCI_MONITOR_BL_WHITE;
+		}
 	}
 
-	if (!drv_data->used_vcp) {
+	if (support_luminance && !drv_data->used_vcp) {
 		/* Try getting luminance */
+		dev_dbg(&dev->dev,
+			"trying to access \"luminance\" control\n");
 		ret = ddcci_monitor_readctrl(drv_data->device, DDCCI_MONITOR_LUMINANCE,
 					     &brightness, &max_brightness);
 		if (ret < 0) {
