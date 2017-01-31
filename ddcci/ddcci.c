@@ -1557,24 +1557,18 @@ end:
 /*
  * Callback for bus_find_device() used in ddcci_remove()
  *
- * Find next device with matching outer address not flagged with
+ * Find next device on i2c_client not flagged with
  * DDCCI_FLAG_REMOVED and flag it.
  */
 static int ddcci_remove_helper(struct device *dev, void *p)
 {
-	unsigned char outer_addr;
 	struct ddcci_device *device;
-
-	if (p)
-		outer_addr = *(unsigned char *)p;
-	else
-		outer_addr = 0;
 
 	device = ddcci_verify_device(dev);
 	if (!device || device->flags & DDCCI_FLAG_REMOVED)
 		return 0;
 
-	if (!outer_addr || (device->outer_addr == outer_addr)) {
+	if (!p || (dev->parent == p)) {
 		device->flags |= DDCCI_FLAG_REMOVED;
 		wmb();
 		return 1;
@@ -1588,11 +1582,10 @@ static int ddcci_remove(struct i2c_client *client)
 {
 	struct ddcci_bus_drv_data *drv_data = i2c_get_clientdata(client);
 	struct device *dev;
-	unsigned char outer_addr = client->addr << 1;
 
 	down(&drv_data->sem);
 	while (1) {
-		dev = bus_find_device(&ddcci_bus_type, NULL, &outer_addr,
+		dev = bus_find_device(&ddcci_bus_type, NULL, client,
 				      ddcci_remove_helper);
 		if (!dev)
 			break;
