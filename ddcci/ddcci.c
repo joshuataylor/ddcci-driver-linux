@@ -29,6 +29,7 @@
 
 #define DDCCI_RECV_BUFFER_SIZE 130
 #define DEVICE_NAME "ddcci"
+#define DDCCI_MAX_CAP_CHUNKS 200
 
 static unsigned int delay = 60;
 static unsigned short autoprobe_addrs[127] = {0xF0, 0xF2, 0xF4, 0xF6, 0xF8};
@@ -339,7 +340,7 @@ static int ddcci_get_caps(struct i2c_client *client, unsigned char addr,
 			/* Another superfluous read to make some devices happy... */
 			ddcci_read(client, addr, true, NULL, 2);
 		}
-	} while (result > 3 && counter < 200);
+	} while (result > 3 && counter < DDCCI_MAX_CAP_CHUNKS);
 
 	kfree(chunkbuf);
 	return offset+result-3;
