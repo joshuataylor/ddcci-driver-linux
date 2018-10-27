@@ -135,7 +135,7 @@ static int __ddcci_write_block(struct i2c_client *client, unsigned char addr,
 	(*ptr) = xor;
 
 	/* Send it */
-	return i2c_master_send(client, sendbuf, len+3);
+	return i2c_master_send(client, sendbuf, ptr - sendbuf + 1);
 }
 
 /*
