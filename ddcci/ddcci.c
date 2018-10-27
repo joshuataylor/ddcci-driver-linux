@@ -1475,7 +1475,8 @@ static int ddcci_detect(struct i2c_client *client, struct i2c_board_info *info)
 
 	/* check response starts with outer addr */
 	if (buf[0] != outer_addr) {
-		pr_debug("detection failed: invalid answer\n");
+		pr_debug("detection failed: invalid identification response (%02x != %02x)\n", buf[0], outer_addr);
+		pr_debug("received message was %*ph \n", ret, buf);
 		return -ENODEV;
 	}
 
