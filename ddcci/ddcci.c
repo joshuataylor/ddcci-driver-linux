@@ -1333,7 +1333,7 @@ static int ddcci_detect_device(struct i2c_client *client, unsigned char addr,
 
 	/* Allocate device struct */
 	device = kzalloc(sizeof(struct ddcci_device), GFP_KERNEL);
-	if (!buffer) {
+	if (!device) {
 		ret = -ENOMEM;
 		goto end;
 	}
