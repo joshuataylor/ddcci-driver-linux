@@ -34,7 +34,7 @@ KBUILD_EXTRA_SYMBOLS := $(src)/../ddcci/Module.symvers
 module: ddcci-backlight.ko
 
 ddcci-backlight.ko: ddcci-backlight.c
-	$(MAKE) -C "$(KDIR)" SUBDIRS="$(src)" modules
+	$(MAKE) -C "$(KDIR)" M="$(src)" modules
 
 ddcci-backlight.mod.c: ddcci-backlight.ko
 ddcci-backlight.mod.o: ddcci-backlight.mod.c
