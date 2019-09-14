@@ -34,7 +34,7 @@ ccflags-y := -I$(src)/../include
 module: ddcci.ko
 
 ddcci.ko: ddcci.c
-	$(MAKE) -C "$(KDIR)" SUBDIRS="$(src)" modules
+	$(MAKE) -C "$(KDIR)" M="$(src)" modules
 
 ddcci.mod.c: ddcci.ko
 ddcci.mod.o: ddcci.mod.c

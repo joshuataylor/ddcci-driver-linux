@@ -24,6 +24,7 @@
 #include <linux/sem.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <linux/version.h>
 
 #include <linux/ddcci.h>
 
@@ -1562,7 +1563,11 @@ end:
  * Find next device on i2c_client not flagged with
  * DDCCI_FLAG_REMOVED and flag it.
  */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,3,0)
+static int ddcci_remove_helper(struct device *dev, const void *p)
+#else
 static int ddcci_remove_helper(struct device *dev, void *p)
+#endif
 {
 	struct ddcci_device *device;
 
