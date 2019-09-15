@@ -16,7 +16,7 @@
 # along with ddcci-driver-linux.  If not, see <http://www.gnu.org/licenses/>.
 
 MODULE_NAME := ddcci
-MODULE_VERSION := 0.3.2
+MODULE_VERSION := 0.3.3
 
 KVER := $(shell uname -r)
 KERNEL_MODLIB := /lib/modules/$(KVER)

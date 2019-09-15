@@ -333,7 +333,7 @@ module_ddcci_driver(ddcci_backlight_driver);
 
 MODULE_AUTHOR("Christoph Grenz");
 MODULE_DESCRIPTION("DDC/CI generic monitor backlight driver");
-MODULE_VERSION("0.3.2");
+MODULE_VERSION("0.3.3");
 MODULE_LICENSE("GPL");
 
 MODULE_ALIAS("ddcci:monitor-*-*-*-*");
