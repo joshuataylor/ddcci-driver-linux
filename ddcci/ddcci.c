@@ -376,19 +376,26 @@ static int ddcci_identify_device(struct i2c_client *client, unsigned char addr,
 	/* Send Identification command */
 	if (!(quirks & DDCCI_QUIRK_WRITE_BYTEWISE)) {
 		ret = __ddcci_write_block(client, addr, buffer, true, cmd, 1);
+		dev_dbg(&client->dev,
+			"[%02x:%02x] writing identification command in block mode: %d\n",
+			client->addr << 1, addr, ret);
 		if ((ret == -ENXIO)
 		    && i2c_check_functionality(client->adapter,
 					       I2C_FUNC_SMBUS_WRITE_BYTE)) {
 			quirks |= DDCCI_QUIRK_WRITE_BYTEWISE;
-			dev_dbg(&client->dev,
+			dev_info(&client->dev,
 				"DDC/CI bus quirk detected: writes must be done bytewise\n");
 			/* Some devices need writing twice after a failed blockwise write */
 			__ddcci_write_bytewise(client, addr, true, cmd, 2);
 			msleep(delay);
 		}
 	}
-	if (ret < 0 && (quirks & DDCCI_QUIRK_WRITE_BYTEWISE))
+	if (ret < 0 && (quirks & DDCCI_QUIRK_WRITE_BYTEWISE)) {
 		ret = __ddcci_write_bytewise(client, addr, true, cmd, 2);
+		dev_dbg(&client->dev,
+			"[%02x:%02x] writing identification command in bytewise mode: %d\n",
+			client->addr << 1, addr, ret);
+	}
 	if (ret < 0)
 		return -ENODEV;
 
@@ -397,28 +404,54 @@ static int ddcci_identify_device(struct i2c_client *client, unsigned char addr,
 
 	/* Receive response */
 	ret = i2c_master_recv(client, buffer, DDCCI_RECV_BUFFER_SIZE);
-	if (ret < 3)
-		return -ENODEV;
+	if (ret < 0) {
+		dev_dbg(&client->dev,
+			"[%02x:%02x] receiving identification response resulted in errno %d\n",
+			client->addr << 1, addr, ret);
+		return ret;
+	}
+
+	if (ret == 0) {
+		dev_dbg(&client->dev,
+			"[%02x:%02x] no identification response received\n",
+			client->addr << 1, addr);
+		return ret;
+	}
 
 	/* Skip first byte if quirk already active */
-	if (quirks & DDCCI_QUIRK_SKIP_FIRST_BYTE) {
+	if (quirks & DDCCI_QUIRK_SKIP_FIRST_BYTE && ret > 1) {
+		dev_dbg(&client->dev,
+			"[%02x:%02x] doubled first byte quirk in effect\n",
+			client->addr << 1, addr);
 		ret--;
 		buffer++;
 	}
 
 	/* If answer too short (= incomplete) break out */
-	if (ret < 3)
+	if (ret < 3) {
+		dev_dbg(&client->dev,
+			"[%02x:%02x] identification response is too short (%d bytes)\n",
+			client->addr << 1, addr, ret);
 		return -EIO;
+	}
 
 	/* validate first byte */
-	if (buffer[0] != addr)
+	if (buffer[0] != addr) {
+		dev_dbg(&client->dev,
+			"[%02x:%02x] identification response: %*ph\n",
+			client->addr << 1, addr, (ret > 32 ? 32 : ret), buffer);
+
+		dev_dbg(&client->dev,
+			"[%02x:%02x] identification response invalid (expected first byte %02x, got %02x)\n",
+			client->addr << 1, addr, addr, buffer[0]);
 		return -ENODEV;
+	}
 
 	/* Check if first byte is doubled (QUIRK_SKIP_FIRST_BYTE) */
 	if (!(quirks & DDCCI_QUIRK_SKIP_FIRST_BYTE)) {
 		if (buffer[0] == buffer[1]) {
 			quirks |= DDCCI_QUIRK_SKIP_FIRST_BYTE;
-			dev_dbg(&client->dev,
+			dev_info(&client->dev,
 				"DDC/CI bus quirk detected: doubled first byte on read\n");
 			ret--;
 			buffer++;
@@ -429,15 +462,26 @@ static int ddcci_identify_device(struct i2c_client *client, unsigned char addr,
 
 	/* validate second byte (protocol flag) */
 	if ((buffer[1] & 0x80) != 0x80 && !(quirks & DDCCI_QUIRK_NO_PFLAG)) {
-		dev_dbg(&client->dev,
+		dev_info(&client->dev,
 			"DDC/CI bus quirk detected: device omits protocol flag on responses\n");
 		quirks |= DDCCI_QUIRK_NO_PFLAG;
 	}
 
 	/* get and check payload length */
 	payload_len = buffer[1] & 0x7F;
-	if (3+payload_len > ret)
+	if (3+payload_len > ret) {
+		dev_dbg(&client->dev,
+			"[%02x:%02x] identification response: %*ph ...\n",
+			client->addr << 1, addr, ret, buffer);
+		dev_dbg(&client->dev,
+			"[%02x:%02x] identification response was truncated (expected %d bytes, got %d)\n",
+			client->addr << 1, addr, 3+payload_len, ret);
 		return -EBADMSG;
+	}
+
+	dev_dbg(&client->dev,
+		"[%02x:%02x] identification response: %*ph\n",
+		client->addr << 1, addr, 3+payload_len, buffer);
 
 	/* calculate checksum */
 	for (i = 0; i < 3+payload_len; i++)
@@ -446,8 +490,8 @@ static int ddcci_identify_device(struct i2c_client *client, unsigned char addr,
 	/* verify checksum */
 	if (xor != 0) {
 		dev_err(&client->dev,
-			"invalid DDC/CI response, corrupted data - xor is 0x%02x, length 0x%02x\n",
-			xor, payload_len);
+			"[%02x:%02x] invalid DDC/CI response, corrupted data - xor is 0x%02x, length 0x%02x\n",
+			client->addr << 1, addr, xor, payload_len);
 		return -EBADMSG;
 	}
 
@@ -1403,6 +1447,9 @@ static int ddcci_detect_device(struct i2c_client *client, unsigned char addr,
 
 	/* Found a device if either identification or capabilities succeeded */
 	if (!device->capabilities && device->vendor[0] == '\0') {
+		dev_dbg(&client->dev,
+			"[%02x:%02x] got neither valid identification nor capability data\n",
+			client->addr << 1, addr);
 		ret = -ENODEV;
 		goto err_free;
 	}
