@@ -1327,8 +1327,14 @@ static int ddcci_parse_capstring(struct ddcci_device *device)
 
 	/* get prot(...) */
 	ret = ddcci_cpy_capstr_item(device->prot, capstr, "prot", 8);
-	if (ret)
-		return ret;
+	if (ret) {
+		if (ret == -ENOENT) {
+			dev_warn(&device->dev, "malformed capability string: no protocol tag");
+			memset(device->prot, 0, 8);
+		} else {
+			return ret;
+		}
+	}
 
 	/* get type(...) */
 	ret = ddcci_cpy_capstr_item(device->type, capstr, "type", 8);
@@ -1349,6 +1355,19 @@ static int ddcci_parse_capstring(struct ddcci_device *device)
 			memset(device->model, 0, 8);
 		} else {
 			return ret;
+		}
+	}
+
+	/* if there is no protocol tag */
+	if (!device->prot[0]) {
+		/* and no type tag: give up. */
+		if (!device->type[0])
+			return -ENOENT;
+
+		/* Assume protocol "monitor" if type is "LCD" or "CRT" */
+		if (strncasecmp(device->type, "LCD", 8) == 0
+		 || strncasecmp(device->type, "CRT", 8) == 0) {
+			memcpy(device->prot, "monitor", 7);
 		}
 	}
 
