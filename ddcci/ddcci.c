@@ -1537,10 +1537,12 @@ static int ddcci_detect(struct i2c_client *client, struct i2c_board_info *info)
 
 	ret = __ddcci_write_block(client, inner_addr, buf, true, cmd, 2);
 
-	if (ret == -ENXIO) {
-		if (!i2c_check_functionality(client->adapter, I2C_FUNC_SMBUS_WRITE_BYTE))
+	if (ret == -ENXIO || ret == -EIO) {
+		if (!i2c_check_functionality(client->adapter, I2C_FUNC_SMBUS_WRITE_BYTE)) {
+			pr_debug("i2c write failed with ENXIO or EIO but bytewise writing is not supported\n");
 			return -ENODEV;
-		pr_debug("i2c write failed with ENXIO, trying bytewise writing\n");
+		}
+		pr_debug("i2c write failed with ENXIO or EIO, trying bytewise writing\n");
 		ret = __ddcci_write_bytewise(client, inner_addr, true, cmd, 2);
 		if (ret == 0) {
 			msleep(delay);
