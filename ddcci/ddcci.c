@@ -1448,13 +1448,33 @@ static int ddcci_detect_device(struct i2c_client *client, unsigned char addr,
 	/* Read capabilities */
 	ret = ddcci_get_caps(client, addr, buffer, 16384);
 	if (ret > 0) {
-		device->capabilities = kzalloc(ret+1, GFP_KERNEL);
-		if (!device->capabilities) {
-			ret = -ENOMEM;
-			goto err_free;
+		/* Fixup unparenthesized capability strings, but only if the first
+		   character is an ascii lower case letter.
+		   This should still allow an early exit for completely garbled
+		   data but helps detecting devices where only the parentheses are
+		   missing, as the second char must be the first character of a
+		   keyword. */
+		if (ret > 2 && buffer[0] >= 'a' && buffer[0] <= 'z') {
+			dev_err(&device->dev, "DDC/CI device quirk detected: unparenthesized capability string\n");
+			device->capabilities = kzalloc(ret+3, GFP_KERNEL);
+			if (!device->capabilities) {
+				ret = -ENOMEM;
+				goto err_free;
+			}
+			device->capabilities_len = ret+2;
+			memcpy(&(device->capabilities[1]), buffer, ret);
+			device->capabilities[0] = '(';
+			device->capabilities[ret+1] = ')';
+		} else {
+			/* Standard case: simply copy the received string */
+			device->capabilities = kzalloc(ret+1, GFP_KERNEL);
+			if (!device->capabilities) {
+				ret = -ENOMEM;
+				goto err_free;
+			}
+			device->capabilities_len = ret;
+			memcpy(device->capabilities, buffer, ret);
 		}
-		device->capabilities_len = ret;
-		memcpy(device->capabilities, buffer, ret);
 
 		ret = ddcci_parse_capstring(device);
 		if (ret) {
