@@ -1439,7 +1439,7 @@ static int ddcci_detect_device(struct i2c_client *client, unsigned char addr,
 
 		ret = ddcci_parse_capstring(device);
 		if (ret) {
-			dev_err(&device->dev, "malformed capability string: %d", ret);
+			dev_err(&device->dev, "malformed capability string: \"%s\" errno %d\n", device->capabilities, ret);
 			ret = -EINVAL;
 			goto err_free;
 		}
