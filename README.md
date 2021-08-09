@@ -56,6 +56,13 @@ ACCESS.bus device module identifier. Empty if the Identification command is not 
 32 bit device number. A fixed serial number if it's positive, a temporary serial number if negative and zero if the
 Identification command is not supported.
 
+#### modalias ####
+
+A combined identifier for driver selection. It has the form `ddcci:<idProt>-<idType>-<idModel>-<idVendor>-<idModule>`.
+
+All non-alphanumeric characters (including whitespace) in the model, vendor or module parts are replaced by
+underscores to prevent issues with software like `systemd-udevd`.
+
 ### Character device interface ###
 
 For each DDC/CI device a character device in `/dev/bus/ddcci/[I²C bus number]/` is created.
@@ -101,9 +108,11 @@ Lower layers may pass error codes not in this list like ENXIO, so be prepared fo
 For each monitor that supports accessing the Backlight Level White or the Luminance property, a backlight device of type "raw" named like the corresponding ddcci device is created. You can find them
 in `/sys/class/backlight/`.
 
+For convenience a symlink "ddcci_backlight" on the device associated with the display connector in `/sys/class/drm/` to the backlight device is created, as long as the graphics driver allows to make this association.
+
 ## Limitations ##
 
-Dependent device (sub devices using DDC/CI directly wired to the monitor, like Calibration devices, IR remotes, etc.) aren't automatically detected. 
+Dependent devices (sub devices using DDC/CI directly wired to the monitor, like Calibration devices, IR remotes, etc.) aren't automatically detected.
 
 You can force detection of internal dependent devices by setting the `autoprobe_addrs` module parameter of ddcci.
 
@@ -121,7 +130,7 @@ Generally, you only need to clone the repository and run make to build both kern
 
 ## Debugging ##
 
-Both drivers use the [dynamic debugging feature](https://www.kernel.org/doc/Documentation/dynamic-debug-howto.txt) of the Linux kernel.
+Both drivers use the [dynamic debugging feature](https://www.kernel.org/doc/html/latest/admin-guide/dynamic-debug-howto.html) of the Linux kernel.
 
 To get detailed debugging messages, set the `dyndbg` module parameter. For details on the syntax and for dynamic activation/deactivation of the debugging messages, see the documentation linked above.
 
