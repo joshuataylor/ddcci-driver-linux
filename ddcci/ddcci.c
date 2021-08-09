@@ -1852,5 +1852,5 @@ MODULE_PARM_DESC(autoprobe_addrs, "internal dependent device addresses to autopr
 /* Module description */
 MODULE_AUTHOR("Christoph Grenz");
 MODULE_DESCRIPTION("DDC/CI bus driver");
-MODULE_VERSION("0.3.3");
+MODULE_VERSION("0.3.4");
 MODULE_LICENSE("GPL");

@@ -16,7 +16,7 @@
 # along with ddcci-driver-linux.  If not, see <http://www.gnu.org/licenses/>.
 
 MODULE_NAME := ddcci-backlight
-MODULE_VERSION := 0.3.3
+MODULE_VERSION := 0.3.4
 
 KVER := $(shell uname -r)
 LIB_MODULES_PATH := /lib/modules
