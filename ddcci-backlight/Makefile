@@ -19,9 +19,10 @@ MODULE_NAME := ddcci-backlight
 MODULE_VERSION := 0.3.3
 
 KVER := $(shell uname -r)
-KERNEL_MODLIB := /lib/modules/$(KVER)
+LIB_MODULES_PATH := /lib/modules
+KERNEL_MODLIB := $(LIB_MODULES_PATH)/$(KVER)
 MODDIR := $(KERNEL_MODLIB)/extra
-KDIR := /lib/modules/$(KVER)/build
+KDIR := $(KERNEL_MODLIB)/build
 PWD := $(shell pwd)
 
 obj-m := ddcci-backlight.o
