@@ -15,6 +15,7 @@
 #include <linux/backlight.h>
 #include <linux/module.h>
 #include <linux/fb.h>
+#include <linux/sysfs.h>
 
 #include <linux/ddcci.h>
 
@@ -27,6 +28,8 @@
 #define DDCCI_MONITOR_LUMINANCE	0x10
 #define DDCCI_MONITOR_BACKLIGHT	0x13
 #define DDCCI_MONITOR_BL_WHITE		0x6B
+
+static bool convenience_symlink = true;
 
 struct ddcci_monitor_drv_data {
 	struct ddcci_device *device;
@@ -207,6 +210,68 @@ static bool ddcci_monitor_find_vcp(unsigned char vcp, const char *s)
 	return false;
 }
 
+static int ddcci_backlight_create_symlink(struct ddcci_device *ddcci_dev)
+{
+	int i, result;
+	struct device *dev = &ddcci_dev->dev;
+	struct kernfs_node *dirent;
+	for (i = 0; i < 3; ++i) {
+		dev = dev->parent;
+		if (!dev) {
+			dev_dbg(&ddcci_dev->dev, "failed to create convenience symlink: ancestor device not found\n");
+			return -ENOENT;
+		}
+	}
+	dirent = sysfs_get_dirent(dev->kobj.sd, "ddcci_backlight");
+	if (dirent) {
+		sysfs_put(dirent);
+		dev_dbg(&ddcci_dev->dev, "failed to create convenience symlink: %s/ddcci_backlight already exists\n", dev_name(dev));
+		return -EEXIST;
+	}
+
+	result = sysfs_create_link(&dev->kobj, &ddcci_dev->dev.kobj, "ddcci_backlight");
+	if (result == 0) {
+		dev_dbg(&ddcci_dev->dev, "created symlink %s/ddcci_backlight\n", dev_name(dev));
+	} else {
+		dev_info(&ddcci_dev->dev, "failed to create convenience symlink: %d\n", result);
+	}
+	return result;
+}
+
+static int ddcci_backlight_remove_symlink(struct ddcci_device *ddcci_dev)
+{
+	int i;
+	struct device *dev = &ddcci_dev->dev;
+	struct kernfs_node *dirent;
+	for (i = 0; i < 3; ++i) {
+		dev = dev->parent;
+		if (!dev)
+			return -ENOENT;
+	}
+	dirent = sysfs_get_dirent(dev->kobj.sd, "ddcci_backlight");
+	if (!dirent) {
+		return -ENOENT;
+	}
+
+	if ((dirent->flags & KERNFS_LINK) == 0) {
+		sysfs_put(dirent);
+		dev_dbg(&ddcci_dev->dev, "won't remove %s/ddcci_backlight: not a symlink\n", dev_name(dev));
+		return -EINVAL;
+	}
+
+	if (dirent->symlink.target_kn != ddcci_dev->dev.kobj.sd) {
+		sysfs_put(dirent);
+		dev_dbg(&ddcci_dev->dev, "won't remove %s/ddcci_backlight: we are not the link target\n", dev_name(dev));
+		return -EINVAL;
+	}
+
+	sysfs_put(dirent);
+
+	sysfs_remove_link(&dev->kobj, "ddcci_backlight");
+	dev_dbg(&ddcci_dev->dev, "removed symlink %s/ddcci_backlight\n", dev_name(dev));
+	return 0;
+}
+
 static int ddcci_monitor_probe(struct ddcci_device *dev,
 			       const struct ddcci_device_id *id)
 {
@@ -300,6 +365,10 @@ static int ddcci_monitor_probe(struct ddcci_device *dev,
 		 ddcci_monitor_vcp_name(drv_data->used_vcp),
 		 dev_name(&dev->dev));
 
+	if (convenience_symlink) {
+		ddcci_backlight_create_symlink(dev);
+	}
+
 	goto end;
 err_free:
 	devm_kfree(&dev->dev, drv_data);
@@ -310,6 +379,7 @@ end:
 static int ddcci_monitor_remove(struct ddcci_device *dev)
 {
 	dev_dbg(&dev->dev, "removing device\n");
+	ddcci_backlight_remove_symlink(dev);
 	return 0;
 }
 
@@ -330,6 +400,10 @@ static struct ddcci_driver ddcci_backlight_driver = {
 };
 
 module_ddcci_driver(ddcci_backlight_driver);
+
+/* Module parameter description */
+module_param(convenience_symlink, bool, S_IRUGO|S_IWUSR);
+MODULE_PARM_DESC(convenience_symlink, "add convenience symlink \"ddcci_backlight\" to ancestor device in sysfs (default true)");
 
 MODULE_AUTHOR("Christoph Grenz");
 MODULE_DESCRIPTION("DDC/CI generic monitor backlight driver");
