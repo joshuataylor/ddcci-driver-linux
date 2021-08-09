@@ -52,6 +52,20 @@ struct ddcci_bus_drv_data {
 	unsigned char recv_buffer[DDCCI_RECV_BUFFER_SIZE];
 };
 
+/* Replace non-alphanumeric characters in a string (used for modalias) */
+static void ddcci_modalias_clean(char *string, size_t n, char replacement)
+{
+	int i;
+	for (i = 0; i < n; ++i) {
+		char c = string[i];
+		if (c == 0) {
+			return;
+		} else if (c < '0' || (c > '9' && c < 'A') || (c > 'Z' && c < 'a') || c > 'z') {
+			string[i] = replacement;
+		}
+	}
+}
+
 /* Write a message to the DDC/CI bus using i2c_smbus_write_byte() */
 static int __ddcci_write_bytewise(struct i2c_client *client, unsigned char addr,
 				  bool p_flag, const unsigned char *buf,
@@ -875,14 +889,24 @@ ATTRIBUTE_GROUPS(ddcci_char_device);
 static int ddcci_device_uevent(struct device *dev, struct kobj_uevent_env *env)
 {
 	struct ddcci_device	*device = to_ddcci_device(dev);
+	char model[9];
+	char vendor[9];
+	char module[9];
+
+	memcpy(model, device->model, 9);
+	memcpy(vendor, device->vendor, 9);
+	memcpy(module, device->module, 9);
+	ddcci_modalias_clean(model, 9, '_');
+	ddcci_modalias_clean(vendor, 9, '_');
+	ddcci_modalias_clean(module, 9, '_');
 
 	if (add_uevent_var(env, "MODALIAS=%s%s-%s-%s-%s-%s",
 			   DDCCI_MODULE_PREFIX,
 			   device->prot,
 			   device->type,
-			   device->model,
-			   device->vendor,
-			   device->module
+			   model,
+			   vendor,
+			   module
 		))
 		return -ENOMEM;
 
