@@ -864,6 +864,35 @@ static ssize_t ddcci_attr_serial_show(struct device *dev,
 	return ret;
 }
 
+static ssize_t ddcci_attr_modalias_show(struct device *dev,
+				      struct device_attribute *attr, char *buf)
+{
+	struct ddcci_device *device = ddcci_verify_device(dev);
+	ssize_t ret = -ENOENT;
+	char model[9];
+	char vendor[9];
+	char module[9];
+
+	if (likely(device != NULL)) {
+		memcpy(model, device->model, 9);
+		memcpy(vendor, device->vendor, 9);
+		memcpy(module, device->module, 9);
+		ddcci_modalias_clean(model, 9, '_');
+		ddcci_modalias_clean(vendor, 9, '_');
+		ddcci_modalias_clean(module, 9, '_');
+
+		ret = scnprintf(buf, PAGE_SIZE, "%s%s-%s-%s-%s-%s\n",
+			DDCCI_MODULE_PREFIX,
+			device->prot,
+			device->type,
+			model,
+			vendor,
+			module
+		);
+	}
+	return ret;
+}
+
 static DEVICE_ATTR(capabilities, S_IRUGO, ddcci_attr_capabilities_show, NULL);
 static DEVICE_ATTR(idProt, S_IRUGO, ddcci_attr_prot_show, NULL);
 static DEVICE_ATTR(idType, S_IRUGO, ddcci_attr_type_show, NULL);
@@ -871,6 +900,7 @@ static DEVICE_ATTR(idModel, S_IRUGO, ddcci_attr_model_show, NULL);
 static DEVICE_ATTR(idVendor, S_IRUGO, ddcci_attr_vendor_show, NULL);
 static DEVICE_ATTR(idModule, S_IRUGO, ddcci_attr_module_show, NULL);
 static DEVICE_ATTR(idSerial, S_IRUGO, ddcci_attr_serial_show, NULL);
+static DEVICE_ATTR(modalias, S_IRUGO, ddcci_attr_modalias_show, NULL);
 
 static struct attribute *ddcci_char_device_attrs[] = {
 	&dev_attr_capabilities.attr,
@@ -880,6 +910,7 @@ static struct attribute *ddcci_char_device_attrs[] = {
 	&dev_attr_idVendor.attr,
 	&dev_attr_idModule.attr,
 	&dev_attr_idSerial.attr,
+	&dev_attr_modalias.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(ddcci_char_device);
