@@ -1579,7 +1579,10 @@ static int ddcci_detect(struct i2c_client *client, struct i2c_board_info *info)
 	unsigned char outer_addr;
 	unsigned char inner_addr;
 	unsigned char buf[32];
-	unsigned char cmd[2] = { DDCCI_COMMAND_ID, 0x00 };
+	unsigned char cmd_id[2] = { DDCCI_COMMAND_ID, 0x00 };
+	unsigned char cmd_caps[3] = { DDCCI_COMMAND_CAPS, 0x00, 0x00};
+	unsigned char *cmd;
+	unsigned int cmd_len;
 
 	/* Check for i2c_master_* functionality */
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
@@ -1587,12 +1590,14 @@ static int ddcci_detect(struct i2c_client *client, struct i2c_board_info *info)
 		return -ENODEV;
 	}
 
-	/* send Identification Request command */
+	/* send Capabilities Request (for main) or Identification Request command (for dependent devices) */
 	outer_addr = client->addr << 1;
 	inner_addr = (outer_addr == DDCCI_DEFAULT_DEVICE_ADDR) ? DDCCI_HOST_ADDR_ODD : outer_addr | 1;
+	cmd = (outer_addr == DDCCI_DEFAULT_DEVICE_ADDR) ? cmd_caps : cmd_id;
+	cmd_len = (outer_addr == DDCCI_DEFAULT_DEVICE_ADDR) ? 3 : 2;
 	pr_debug("detecting %d:%02x\n", client->adapter->nr, outer_addr);
 
-	ret = __ddcci_write_block(client, inner_addr, buf, true, cmd, 2);
+	ret = __ddcci_write_block(client, inner_addr, buf, true, cmd, cmd_len);
 
 	if (ret == -ENXIO || ret == -EIO) {
 		if (!i2c_check_functionality(client->adapter, I2C_FUNC_SMBUS_WRITE_BYTE)) {
@@ -1600,10 +1605,10 @@ static int ddcci_detect(struct i2c_client *client, struct i2c_board_info *info)
 			return -ENODEV;
 		}
 		pr_debug("i2c write failed with ENXIO or EIO, trying bytewise writing\n");
-		ret = __ddcci_write_bytewise(client, inner_addr, true, cmd, 2);
+		ret = __ddcci_write_bytewise(client, inner_addr, true, cmd, cmd_len);
 		if (ret == 0) {
 			msleep(delay);
-			ret = __ddcci_write_bytewise(client, inner_addr, true, cmd, 2);
+			ret = __ddcci_write_bytewise(client, inner_addr, true, cmd, cmd_len);
 		}
 	}
 
@@ -1621,7 +1626,7 @@ static int ddcci_detect(struct i2c_client *client, struct i2c_board_info *info)
 
 	/* check response starts with outer addr */
 	if (buf[0] != outer_addr) {
-		pr_debug("detection failed: invalid identification response (%02x != %02x)\n", buf[0], outer_addr);
+		pr_debug("detection failed: invalid %s response (%02x != %02x)\n", (cmd == cmd_id) ? "identification" : "capabilities", buf[0], outer_addr);
 		pr_debug("received message was %*ph \n", ret, buf);
 		return -ENODEV;
 	}
