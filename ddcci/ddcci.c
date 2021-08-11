@@ -1447,14 +1447,14 @@ static int ddcci_detect_device(struct i2c_client *client, unsigned char addr,
 	buffer = kmalloc(16384, GFP_KERNEL);
 	if (!buffer) {
 		ret = -ENOMEM;
-		goto end;
+		goto err_end;
 	}
 
 	/* Allocate device struct */
 	device = kzalloc(sizeof(struct ddcci_device), GFP_KERNEL);
 	if (!device) {
 		ret = -ENOMEM;
-		goto end;
+		goto err_end;
 	}
 
 	/* Initialize device */
@@ -1551,10 +1551,12 @@ static int ddcci_detect_device(struct i2c_client *client, unsigned char addr,
 	/* Setup chardev */
 	down(&core_lock);
 	ret = ddcci_setup_char_device(device);
+	up(&core_lock);
 	if (ret)
 		goto err_free;
 
-	/* Add device */
+	/* Release semaphore and add device to the tree */
+	up(&drv_data->sem);
 	pr_debug("found device at %d:%02x:%02x\n", client->adapter->nr, outer_addr, addr);
 	ret = device_add(&device->dev);
 	if (ret)
@@ -1563,10 +1565,10 @@ static int ddcci_detect_device(struct i2c_client *client, unsigned char addr,
 	goto end;
 err_free:
 	put_device(&device->dev);
+err_end:
+	up(&drv_data->sem);
 end:
 	kfree(buffer);
-	up(&drv_data->sem);
-	up(&core_lock);
 	return ret;
 }
 
