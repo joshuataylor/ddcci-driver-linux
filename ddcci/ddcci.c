@@ -1323,7 +1323,7 @@ const char *ddcci_find_capstr_item(const char * capabilities,
 	int taglen = strlen(tag);
 
 	/* Check length of requested tag */
-	if (unlikely(taglen <= 0 || taglen > 65535))
+	if (unlikely(taglen <= 0 || taglen > 1023))
 		return ERR_PTR(-EINVAL);
 
 	/* Find tag */
