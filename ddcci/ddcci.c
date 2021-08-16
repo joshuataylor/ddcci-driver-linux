@@ -1493,8 +1493,14 @@ static int ddcci_detect_device(struct i2c_client *client, unsigned char addr,
 
 	/* Read identification and check for quirks */
 	ret = ddcci_identify_device(client, addr, buffer, 29);
-	if (ret < 0)
-		goto err_free;
+	if (ret < 0) {
+		if (!dependent && (ret == -EBADMSG || ret == -EMSGSIZE)) {
+			dev_warn(&device->dev, "DDC/CI main device sent broken response on identification. Trying to detect solely based on capability information.\n");
+		} else {
+			goto err_free;
+		}
+	}
+
 	if (ret == 29 && buffer[0] == DDCCI_REPLY_ID) {
 		memcpy(device->vendor, &buffer[7], 8);
 		memcpy(device->module, &buffer[17], 8);
