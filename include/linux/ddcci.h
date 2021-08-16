@@ -159,6 +159,6 @@ static inline void ddcci_set_drvdata(struct ddcci_device *dev, void *data)
 unsigned long ddcci_quirks(struct ddcci_device *dev);
 
 const char *ddcci_find_capstr_item(const char *capabilities, const char *tag,
-				    ptrdiff_t *length);
+				   size_t *length);
 
 #endif

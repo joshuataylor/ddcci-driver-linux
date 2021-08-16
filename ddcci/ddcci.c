@@ -1323,7 +1323,7 @@ static char *ddcci_capstr_tok(const char *s, int depth)
  */
 const char *ddcci_find_capstr_item(const char * capabilities,
 				   const char * __restrict tag,
-				   ptrdiff_t *length)
+				   size_t *length)
 {
 	const char *src = capabilities, *ptr;
 	ptrdiff_t len;
@@ -1352,7 +1352,7 @@ const char *ddcci_find_capstr_item(const char * capabilities,
 
 	/* Return pointer and length */
 	if (likely(length != NULL))
-		*length = len;
+		*length = (size_t)len;
 	return src;
 }
 EXPORT_SYMBOL(ddcci_find_capstr_item);
@@ -1362,7 +1362,7 @@ static int ddcci_cpy_capstr_item(char *dest, const char *src,
 				  const char * __restrict tag, size_t maxlen)
 {
 	const char *ptr;
-	ptrdiff_t len;
+	size_t len;
 
 	/* Find tag */
 	ptr = ddcci_find_capstr_item(src, tag, &len);
@@ -1371,7 +1371,7 @@ static int ddcci_cpy_capstr_item(char *dest, const char *src,
 	}
 
 	/* Copy value */
-	memcpy(dest, ptr, (len < maxlen) ? len : maxlen);
+	memcpy(dest, ptr, min(len, maxlen));
 	return 0;
 }
 
