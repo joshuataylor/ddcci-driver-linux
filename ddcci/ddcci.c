@@ -750,7 +750,7 @@ static ssize_t ddcci_attr_prot_show(struct device *dev,
 	size_t len;
 
 	if (likely(device != NULL)) {
-		len = strlen(device->prot);
+		len = strnlen(device->prot, sizeof(device->prot));
 		strncpy(buf, device->prot, PAGE_SIZE);
 		if (len == 0) {
 			ret = len;
@@ -772,7 +772,7 @@ static ssize_t ddcci_attr_type_show(struct device *dev,
 	size_t len;
 
 	if (likely(device != NULL)) {
-		len = strlen(device->type);
+		len = strnlen(device->type, sizeof(device->type));
 		strncpy(buf, device->type, PAGE_SIZE);
 		if (len == 0) {
 			ret = len;
@@ -794,7 +794,7 @@ static ssize_t ddcci_attr_model_show(struct device *dev,
 	size_t len;
 
 	if (likely(device != NULL)) {
-		len = strlen(device->model);
+		len = strnlen(device->model, sizeof(device->model));
 		strncpy(buf, device->model, PAGE_SIZE);
 		if (len == 0) {
 			ret = len;
@@ -816,7 +816,7 @@ static ssize_t ddcci_attr_vendor_show(struct device *dev,
 	size_t len;
 
 	if (likely(device != NULL)) {
-		len = strlen(device->vendor);
+		len = strnlen(device->vendor, sizeof(device->vendor));
 		strncpy(buf, device->vendor, PAGE_SIZE);
 		if (len == 0) {
 			ret = len;
@@ -838,7 +838,7 @@ static ssize_t ddcci_attr_module_show(struct device *dev,
 	size_t len;
 
 	if (likely(device != NULL)) {
-		len = strlen(device->module);
+		len = strnlen(device->module, sizeof(device->module));
 		strncpy(buf, device->module, PAGE_SIZE);
 		if (len == 0) {
 			ret = len;
@@ -1320,7 +1320,7 @@ const char *ddcci_find_capstr_item(const char * capabilities,
 {
 	const char *src = capabilities, *ptr;
 	ptrdiff_t len;
-	int taglen = strlen(tag);
+	int taglen = strnlen(tag, 1024);
 
 	/* Check length of requested tag */
 	if (unlikely(taglen <= 0 || taglen > 1023))
