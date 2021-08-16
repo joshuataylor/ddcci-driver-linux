@@ -389,7 +389,7 @@ static int ddcci_identify_device(struct i2c_client *client, unsigned char addr,
 
 	/* Send Identification command */
 	if (!(quirks & DDCCI_QUIRK_WRITE_BYTEWISE)) {
-		ret = __ddcci_write_block(client, addr, buffer, true, cmd, 1);
+		ret = __ddcci_write_block(client, addr, buffer, true, cmd, sizeof(cmd));
 		dev_dbg(&client->dev,
 			"[%02x:%02x] writing identification command in block mode: %d\n",
 			client->addr << 1, addr, ret);
@@ -400,12 +400,12 @@ static int ddcci_identify_device(struct i2c_client *client, unsigned char addr,
 			dev_info(&client->dev,
 				"DDC/CI bus quirk detected: writes must be done bytewise\n");
 			/* Some devices need writing twice after a failed blockwise write */
-			__ddcci_write_bytewise(client, addr, true, cmd, 2);
+			__ddcci_write_bytewise(client, addr, true, cmd, sizeof(cmd));
 			msleep(delay);
 		}
 	}
 	if (ret < 0 && (quirks & DDCCI_QUIRK_WRITE_BYTEWISE)) {
-		ret = __ddcci_write_bytewise(client, addr, true, cmd, 2);
+		ret = __ddcci_write_bytewise(client, addr, true, cmd, sizeof(cmd));
 		dev_dbg(&client->dev,
 			"[%02x:%02x] writing identification command in bytewise mode: %d\n",
 			client->addr << 1, addr, ret);
@@ -1601,7 +1601,7 @@ static int ddcci_detect(struct i2c_client *client, struct i2c_board_info *info)
 	outer_addr = client->addr << 1;
 	inner_addr = (outer_addr == DDCCI_DEFAULT_DEVICE_ADDR) ? DDCCI_HOST_ADDR_ODD : outer_addr | 1;
 	cmd = (outer_addr == DDCCI_DEFAULT_DEVICE_ADDR) ? cmd_caps : cmd_id;
-	cmd_len = (outer_addr == DDCCI_DEFAULT_DEVICE_ADDR) ? 3 : 2;
+	cmd_len = (outer_addr == DDCCI_DEFAULT_DEVICE_ADDR) ? sizeof(cmd_caps) : sizeof(cmd_id);
 	pr_debug("detecting %d:%02x\n", client->adapter->nr, outer_addr);
 
 	ret = __ddcci_write_block(client, inner_addr, buf, true, cmd, cmd_len);
