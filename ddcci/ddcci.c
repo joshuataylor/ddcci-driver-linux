@@ -68,7 +68,7 @@ static void ddcci_modalias_clean(char *string, size_t n, char replacement)
 
 /* Write a message to the DDC/CI bus using i2c_smbus_write_byte() */
 static int __ddcci_write_bytewise(struct i2c_client *client, unsigned char addr,
-				  bool p_flag, const unsigned char *buf,
+				  bool p_flag, const unsigned char * __restrict buf,
 				  unsigned char len)
 {
 	int ret = 0;
@@ -1314,8 +1314,9 @@ static char *ddcci_capstr_tok(const char *s, int depth)
  * If the tag is not found or another error occurs, an ERR_PTR is returned
  * and `length` stays untouched.
  */
-const char *ddcci_find_capstr_item(const char *capabilities, const char *tag,
-				    ptrdiff_t *length)
+const char *ddcci_find_capstr_item(const char * capabilities,
+				   const char * __restrict tag,
+				   ptrdiff_t *length)
 {
 	const char *src = capabilities, *ptr;
 	ptrdiff_t len;
@@ -1351,7 +1352,7 @@ EXPORT_SYMBOL(ddcci_find_capstr_item);
 
 /* Search the capability string for a tag and copy the value to dest */
 static int ddcci_cpy_capstr_item(char *dest, const char *src,
-				  const char *tag, size_t maxlen)
+				  const char * __restrict tag, size_t maxlen)
 {
 	const char *ptr;
 	ptrdiff_t len;
