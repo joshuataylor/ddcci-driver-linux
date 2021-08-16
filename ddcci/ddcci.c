@@ -876,17 +876,17 @@ static ssize_t ddcci_attr_modalias_show(struct device *dev,
 {
 	struct ddcci_device *device = ddcci_verify_device(dev);
 	ssize_t ret = -ENOENT;
-	char model[9];
-	char vendor[9];
-	char module[9];
+	char model[ARRAY_SIZE(device->model)];
+	char vendor[ARRAY_SIZE(device->model)];
+	char module[ARRAY_SIZE(device->model)];
 
 	if (likely(device != NULL)) {
-		memcpy(model, device->model, 9);
-		memcpy(vendor, device->vendor, 9);
-		memcpy(module, device->module, 9);
-		ddcci_modalias_clean(model, 9, '_');
-		ddcci_modalias_clean(vendor, 9, '_');
-		ddcci_modalias_clean(module, 9, '_');
+		memcpy(model, device->model, sizeof(model));
+		memcpy(vendor, device->vendor, sizeof(vendor));
+		memcpy(module, device->module, sizeof(module));
+		ddcci_modalias_clean(model, sizeof(model), '_');
+		ddcci_modalias_clean(vendor, sizeof(vendor), '_');
+		ddcci_modalias_clean(module, sizeof(module), '_');
 
 		ret = scnprintf(buf, PAGE_SIZE, "%s%s-%s-%s-%s-%s\n",
 			DDCCI_MODULE_PREFIX,
@@ -927,16 +927,16 @@ ATTRIBUTE_GROUPS(ddcci_char_device);
 static int ddcci_device_uevent(struct device *dev, struct kobj_uevent_env *env)
 {
 	struct ddcci_device	*device = to_ddcci_device(dev);
-	char model[9];
-	char vendor[9];
-	char module[9];
+	char model[ARRAY_SIZE(device->model)];
+	char vendor[ARRAY_SIZE(device->vendor)];
+	char module[ARRAY_SIZE(device->module)];
 
-	memcpy(model, device->model, 9);
-	memcpy(vendor, device->vendor, 9);
-	memcpy(module, device->module, 9);
-	ddcci_modalias_clean(model, 9, '_');
-	ddcci_modalias_clean(vendor, 9, '_');
-	ddcci_modalias_clean(module, 9, '_');
+	memcpy(model, device->model, sizeof(model));
+	memcpy(vendor, device->vendor, sizeof(vendor));
+	memcpy(module, device->module, sizeof(module));
+	ddcci_modalias_clean(model, sizeof(model), '_');
+	ddcci_modalias_clean(vendor, sizeof(vendor), '_');
+	ddcci_modalias_clean(module, sizeof(module), '_');
 
 	if (add_uevent_var(env, "MODALIAS=%s%s-%s-%s-%s-%s",
 			   DDCCI_MODULE_PREFIX,
@@ -1389,33 +1389,33 @@ static int ddcci_parse_capstring(struct ddcci_device *device)
 		return -EINVAL;
 
 	/* get prot(...) */
-	ret = ddcci_cpy_capstr_item(device->prot, capstr, "prot", 8);
+	ret = ddcci_cpy_capstr_item(device->prot, capstr, "prot", sizeof(device->prot)-1);
 	if (ret) {
 		if (ret == -ENOENT) {
 			dev_warn(&device->dev, "malformed capability string: no protocol tag");
-			memset(device->prot, 0, 8);
+			memset(device->prot, 0, sizeof(device->prot)-1);
 		} else {
 			return ret;
 		}
 	}
 
 	/* get type(...) */
-	ret = ddcci_cpy_capstr_item(device->type, capstr, "type", 8);
+	ret = ddcci_cpy_capstr_item(device->type, capstr, "type", sizeof(device->type)-1);
 	if (ret) {
 		if (ret == -ENOENT) {
 			dev_warn(&device->dev, "malformed capability string: no type tag");
-			memset(device->type, 0, 8);
+			memset(device->type, 0, sizeof(device->type)-1);
 		} else {
 			return ret;
 		}
 	}
 
 	/* and then model(...) */
-	ret = ddcci_cpy_capstr_item(device->model, capstr, "model", 8);
+	ret = ddcci_cpy_capstr_item(device->model, capstr, "model", sizeof(device->model)-1);
 	if (ret) {
 		if (ret == -ENOENT) {
 			dev_warn(&device->dev, "malformed capability string: no model tag");
-			memset(device->model, 0, 8);
+			memset(device->model, 0, sizeof(device->model)-1);
 		} else {
 			return ret;
 		}
@@ -1428,8 +1428,8 @@ static int ddcci_parse_capstring(struct ddcci_device *device)
 			return -ENOENT;
 
 		/* Assume protocol "monitor" if type is "LCD" or "CRT" */
-		if (strncasecmp(device->type, "LCD", 8) == 0
-		 || strncasecmp(device->type, "CRT", 8) == 0) {
+		if (strncasecmp(device->type, "LCD", sizeof(device->type)-1) == 0
+		 || strncasecmp(device->type, "CRT", sizeof(device->type)-1) == 0) {
 			memcpy(device->prot, "monitor", 7);
 		}
 	}
