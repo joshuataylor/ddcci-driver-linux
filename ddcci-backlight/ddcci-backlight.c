@@ -407,9 +407,7 @@ MODULE_PARM_DESC(convenience_symlink, "add convenience symlink \"ddcci_backlight
 
 MODULE_AUTHOR("Christoph Grenz");
 MODULE_DESCRIPTION("DDC/CI generic monitor backlight driver");
-MODULE_VERSION("0.3.4");
+MODULE_VERSION("0.4");
 MODULE_LICENSE("GPL");
 
 MODULE_ALIAS("ddcci:monitor-*-*-*-*");
-
-
