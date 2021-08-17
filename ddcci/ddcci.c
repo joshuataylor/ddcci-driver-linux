@@ -322,7 +322,7 @@ static int ddcci_get_caps(struct i2c_client *client, unsigned char addr,
 			  unsigned char *buf, unsigned int len)
 {
 	int result = 0, counter = 0, offset = 0;
-	unsigned char cmd[3] = { DDCCI_COMMAND_CAPS, 0x00, 0x00};
+	unsigned char cmd[3] = { DDCCI_COMMAND_CAPS, 0x00, 0x00 };
 	unsigned char *chunkbuf = kzalloc(35, GFP_KERNEL);
 
 	if (!chunkbuf)
@@ -350,7 +350,11 @@ static int ddcci_get_caps(struct i2c_client *client, unsigned char addr,
 				result = -EIO;
 				goto err_free;
 			}
-			memcpy(buf, chunkbuf+3, result-3);
+			if (result < 3) {
+				result = -EIO;
+				goto err_free;
+			}
+			memcpy(buf, chunkbuf+3, min((unsigned int)result-3, len));
 
 			counter++;
 			/* adjust offset, etc. */
