@@ -389,7 +389,7 @@ static int ddcci_identify_device(struct i2c_client *client, unsigned char addr,
 {
 	int i, payload_len, ret = -ENODEV;
 	unsigned long quirks;
-	unsigned char cmd[2] = { DDCCI_COMMAND_ID, 0x00 };
+	unsigned char cmd[1] = { DDCCI_COMMAND_ID };
 	unsigned char *buffer;
 	unsigned char xor = DDCCI_HOST_ADDR_EVEN;
 	struct ddcci_bus_drv_data *bus_drv_data;
@@ -1597,7 +1597,7 @@ static int ddcci_detect(struct i2c_client *client, struct i2c_board_info *info)
 	unsigned char outer_addr;
 	unsigned char inner_addr;
 	unsigned char buf[32];
-	unsigned char cmd_id[2] = { DDCCI_COMMAND_ID, 0x00 };
+	unsigned char cmd_id[1] = { DDCCI_COMMAND_ID };
 	unsigned char cmd_caps[3] = { DDCCI_COMMAND_CAPS, 0x00, 0x00};
 	unsigned char *cmd;
 	unsigned int cmd_len;
