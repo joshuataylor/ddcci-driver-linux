@@ -45,11 +45,14 @@ struct bus_type ddcci_bus_type;
 EXPORT_SYMBOL_GPL(ddcci_bus_type);
 
 /* Assert neccessary string array sizes  */
-static_assert(FIELD_SIZEOF(struct ddcci_device, prot) > 8);
-static_assert(FIELD_SIZEOF(struct ddcci_device, type) > 8);
-static_assert(FIELD_SIZEOF(struct ddcci_device, model) > 8);
-static_assert(FIELD_SIZEOF(struct ddcci_device, vendor) > 8);
-static_assert(FIELD_SIZEOF(struct ddcci_device, module) > 8);
+#ifndef sizeof_field
+# define sizeof_field(t,m) FIELD_SIZEOF(t,m)
+#endif
+static_assert(sizeof_field(struct ddcci_device, prot) > 8);
+static_assert(sizeof_field(struct ddcci_device, type) > 8);
+static_assert(sizeof_field(struct ddcci_device, model) > 8);
+static_assert(sizeof_field(struct ddcci_device, vendor) > 8);
+static_assert(sizeof_field(struct ddcci_device, module) > 8);
 
 /* Internal per-i2c-client driver data */
 struct ddcci_bus_drv_data {
