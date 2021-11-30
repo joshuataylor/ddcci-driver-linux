@@ -1281,6 +1281,13 @@ static int ddcci_device_remove(struct device *dev)
 	return ret;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+static void ddcci_device_remove_void(struct device *dev)
+{
+	ddcci_device_remove(dev);
+}
+#endif
+
 /**
  * DDCCI bus type structure
  */
@@ -1288,7 +1295,11 @@ struct bus_type ddcci_bus_type = {
 	.name		= "ddcci",
 	.match		= ddcci_device_match,
 	.probe		= ddcci_device_probe,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+	.remove		= ddcci_device_remove_void
+#else
 	.remove		= ddcci_device_remove
+#endif
 };
 
 /* Main I2C driver */
@@ -1880,5 +1891,5 @@ MODULE_PARM_DESC(autoprobe_addrs, "internal dependent device addresses to autopr
 /* Module description */
 MODULE_AUTHOR("Christoph Grenz");
 MODULE_DESCRIPTION("DDC/CI bus driver");
-MODULE_VERSION("0.4.1");
+MODULE_VERSION("0.4.2");
 MODULE_LICENSE("GPL");
