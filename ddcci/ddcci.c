@@ -1209,7 +1209,7 @@ err:
 }
 EXPORT_SYMBOL(ddcci_device_writeread);
 
-#define IS_ANY_ID(x) (((x)[0] == -1) && ((x)[7] == -1))
+#define IS_ANY_ID(x) (((x)[0] == '\xFF') && ((x)[7] == '\xFF'))
 
 /* Check if any device id in the array matches the device and return the matching id */
 static const struct ddcci_device_id *ddcci_match_id(const struct ddcci_device_id *id,
