@@ -43,6 +43,7 @@ static DEFINE_SEMAPHORE(core_lock);
 
 struct bus_type ddcci_bus_type;
 EXPORT_SYMBOL_GPL(ddcci_bus_type);
+static bool ddcci_bus_registered;
 
 /* Assert neccessary string array sizes  */
 #ifndef sizeof_field
@@ -931,7 +932,7 @@ ATTRIBUTE_GROUPS(ddcci_char_device);
 
 /* DDC/CI bus */
 
-static int ddcci_device_uevent(struct device *dev, struct kobj_uevent_env *env)
+static int ddcci_device_uevent(const struct device *dev, struct kobj_uevent_env *env)
 {
 	struct ddcci_device	*device = to_ddcci_device(dev);
 	char model[ARRAY_SIZE(device->model)];
@@ -1011,7 +1012,7 @@ static void ddcci_device_release(struct device *dev)
 	kfree(device);
 }
 
-static char *ddcci_devnode(struct device *dev,
+static char *ddcci_devnode(const struct device *dev,
 			 umode_t *mode, kuid_t *uid, kgid_t *gid)
 {
 	struct ddcci_device *device;
@@ -1021,7 +1022,7 @@ static char *ddcci_devnode(struct device *dev,
 			 device->i2c_client->adapter->nr);
 }
 
-static char *ddcci_dependent_devnode(struct device *dev,
+static char *ddcci_dependent_devnode(const struct device *dev,
 			 umode_t *mode, kuid_t *uid, kgid_t *gid)
 {
 	struct ddcci_device *device;
@@ -1100,7 +1101,7 @@ int ddcci_register_driver(struct module *owner, struct ddcci_driver *driver)
 	int ret;
 
 	/* Can't register until after driver model init */
-	if (unlikely(WARN_ON(!ddcci_bus_type.p)))
+	if (unlikely(WARN_ON(!ddcci_bus_registered)))
 		return -EAGAIN;
 
 	pr_debug("registering driver [%s]\n", driver->driver.name);
@@ -1672,8 +1673,9 @@ static int ddcci_detect(struct i2c_client *client, struct i2c_board_info *info)
 }
 
 /* I2C probe function */
-static int ddcci_probe(struct i2c_client *client, const struct i2c_device_id *id)
+static int ddcci_probe(struct i2c_client *client)
 {
+	const struct i2c_device_id *id = i2c_client_get_device_id(client);
 	int i, ret = -ENODEV, tmp;
 	unsigned char main_addr, addr;
 	struct ddcci_bus_drv_data *drv_data;
@@ -1849,6 +1851,7 @@ static int __init ddcci_module_init(void)
 		pr_err("failed to register bus 'ddcci'\n");
 		goto err_busreg;
 	}
+	ddcci_bus_registered = true;
 
 	/* Register I2C driver */
 	ret = i2c_add_driver(&ddcci_driver);
